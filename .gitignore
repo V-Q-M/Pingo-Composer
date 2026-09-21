@@ -1,0 +1,6 @@
+# Build folders of CLion and CMake
+cmake-build-*/
+build/
+
+# macOS
+.DS_Store
