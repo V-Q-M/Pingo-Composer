@@ -351,8 +351,12 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
     int step = std::max(StepAt(grid, ui.mouse.x), 0);
     int pitch = PitchAt(grid, ui.mouse.y);
 
-    // Delete takes away what the mouse touched last
-    if ((IsKeyPressed(KEY_DELETE) || IsKeyPressed(KEY_BACKSPACE)) && touched != Pattern::NOTHING) {
+    // Delete takes away what the mouse touched last. Backspace alone belongs
+    // to the transport and rewinds, so it only deletes with Shift.
+    bool erase = IsKeyPressed(KEY_DELETE) ||
+                 (IsKeyPressed(KEY_BACKSPACE) && (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)));
+
+    if (erase && touched != Pattern::NOTHING) {
         std::size_t removed = touched;
 
         pattern.Remove(removed);

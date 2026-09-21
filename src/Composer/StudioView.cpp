@@ -36,7 +36,10 @@ void StudioView::Update(float dt) {
         playing = !playing;
     }
 
-    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) {
+    // Backspace rewinds. With Shift it belongs to the roll and deletes a note.
+    bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) || (IsKeyPressed(KEY_BACKSPACE) && !shift)) {
         position = 0.0f;
     }
 }
@@ -232,7 +235,7 @@ void StudioView::DrawStatus(Ui &ui, Rectangle bounds) {
         playing ? ui.theme.titleVariant : ui.theme.mutedVariant
     );
 
-    std::string keys = "DRAG DRAW   RIGHT ERASE   ARROWS EDIT NOTE   WHEEL SCROLL   SPACE PLAY";
+    std::string keys = "DRAG DRAW   RIGHT ERASE   ARROWS EDIT   BACKSPACE REWIND   SPACE PLAY";
 
     Widgets::Label(
         ui,

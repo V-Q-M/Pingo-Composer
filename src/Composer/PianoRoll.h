@@ -22,7 +22,8 @@
 //   left, right          one step shorter or longer
 //   Shift left, right    moves it one step through the time
 //   up, down             one half step higher or lower, with Shift an octave
-//   Delete               removes it
+//   Delete, Shift back   removes it. Backspace alone rewinds the song, see
+//                        StudioView
 //
 // The roll keeps where it looks (scrolling and zoom), the notes belong to the
 // pattern. One roll can therefore show one channel after another.
