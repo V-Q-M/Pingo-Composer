@@ -232,7 +232,7 @@ void StudioView::DrawStatus(Ui &ui, Rectangle bounds) {
         playing ? ui.theme.titleVariant : ui.theme.mutedVariant
     );
 
-    std::string keys = "DRAG DRAW   RIGHT ERASE   WHEEL SCROLL   CTRL WHEEL ZOOM   SPACE PLAY";
+    std::string keys = "DRAG DRAW   RIGHT ERASE   ARROWS EDIT NOTE   WHEEL SCROLL   SPACE PLAY";
 
     Widgets::Label(
         ui,

@@ -30,6 +30,13 @@ constexpr int SCROLL_PITCHES = 3;
 
 constexpr float ZOOM_STEP = 1.25f;
 
+// The scrollbars, in the same colors as the forms of the engine
+constexpr Color SCROLL_TRACK{0, 0, 0, 120};
+constexpr Color SCROLL_THUMB{255, 255, 255, 150};
+
+// However little is visible, this much thumb stays to grab
+constexpr float SCROLLBAR_MIN_THUMB = 8.0f;
+
 static Color Shade(Color colour, float factor) {
     return {
         static_cast<unsigned char>(static_cast<float>(colour.r) * factor),
@@ -51,16 +58,25 @@ float PianoRoll::ScrubbedBeats() const {
 PianoRoll::Grid PianoRoll::LayoutFor(Rectangle bounds) const {
     Grid grid;
 
-    grid.ruler = {bounds.x + KEYS_WIDTH, bounds.y, bounds.width - KEYS_WIDTH, RULER_HEIGHT};
-    grid.keys = {bounds.x, bounds.y + RULER_HEIGHT, KEYS_WIDTH, bounds.height - RULER_HEIGHT};
-    grid.area = {
-        bounds.x + KEYS_WIDTH,
-        bounds.y + RULER_HEIGHT,
-        bounds.width - KEYS_WIDTH,
-        bounds.height - RULER_HEIGHT
-    };
+    float width = bounds.width - KEYS_WIDTH - SCROLLBAR_SIZE;
+    float height = bounds.height - RULER_HEIGHT - SCROLLBAR_SIZE;
+
+    grid.ruler = {bounds.x + KEYS_WIDTH, bounds.y, width, RULER_HEIGHT};
+    grid.keys = {bounds.x, bounds.y + RULER_HEIGHT, KEYS_WIDTH, height};
+    grid.area = {bounds.x + KEYS_WIDTH, bounds.y + RULER_HEIGHT, width, height};
+
+    grid.timeBar = {grid.area.x, grid.area.y + height, width, SCROLLBAR_SIZE};
+    grid.pitchBar = {grid.area.x + width, grid.area.y, SCROLLBAR_SIZE, height};
 
     return grid;
+}
+
+float PianoRoll::VisibleSteps(const Grid &grid) const {
+    return grid.area.width / stepWidth;
+}
+
+float PianoRoll::VisibleRows(const Grid &grid) const {
+    return grid.area.height / PITCH_HEIGHT;
 }
 
 int PianoRoll::StepAt(const Grid &grid, float x) const {
@@ -84,6 +100,12 @@ void PianoRoll::Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour) {
 
     scrubbed = -1.0f;
 
+    // Behind the last note there is always room for more
+    contentSteps = std::max(
+        static_cast<float>(pattern.Length() + TAIL_STEPS),
+        scroll + VisibleSteps(grid)
+    );
+
     // While playing the view follows the line, so the song stays visible
     if (following) {
         float visible = grid.area.width / stepWidth;
@@ -95,6 +117,8 @@ void PianoRoll::Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour) {
     }
 
     HandleWheel(ui, grid);
+    HandleKeys(pattern);
+    HandleScrollbars(ui, grid);
     HandleMouse(ui, grid, pattern);
     LimitView(grid);
 
@@ -318,6 +342,10 @@ void PianoRoll::HandleWheel(Ui &ui, const Grid &grid) {
 }
 
 void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
+    if (drag == Drag::ScrollTime || drag == Drag::ScrollPitch) {
+        return;
+    }
+
     bool inside = Widgets::Hovered(ui, grid.area);
 
     int step = std::max(StepAt(grid, ui.mouse.x), 0);
@@ -359,23 +387,37 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
         } else {
             const Note &note = *pattern.Get(under);
 
+            float start = XOf(grid, static_cast<float>(note.step));
             float end = XOf(grid, static_cast<float>(note.End()));
 
             dragNote = under;
             dragStart = note;
             grabStep = step;
             grabPitch = pitch;
-            drag = ui.mouse.x >= end - EDGE_WIDTH ? Drag::Resize : Drag::Move;
+
+            if (ui.mouse.x >= end - EDGE_WIDTH) {
+                drag = Drag::Resize;
+            } else if (ui.mouse.x <= start + EDGE_WIDTH) {
+                drag = Drag::ResizeStart;
+            } else {
+                drag = Drag::Move;
+            }
         }
 
         touched = dragNote;
     }
 
-    if (drag != Drag::None) {
+    if (drag == Drag::Create || drag == Drag::Resize || drag == Drag::ResizeStart || drag == Drag::Move) {
         Note note = dragStart;
 
         if (drag == Drag::Create || drag == Drag::Resize) {
             note.length = std::max(step - note.step + 1, 1);
+        } else if (drag == Drag::ResizeStart) {
+            // The end stays where it is, only the start follows the mouse
+            int start = std::clamp(step, 0, dragStart.End() - 1);
+
+            note.step = start;
+            note.length = dragStart.End() - start;
         } else {
             note.step = std::max(dragStart.step + step - grabStep, 0);
             note.pitch = dragStart.pitch + pitch - grabPitch;
@@ -388,6 +430,132 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
             dragNote = Pattern::NOTHING;
         }
     }
+}
+
+// The chosen note with the arrow keys: length, place and pitch, without
+// aiming with the mouse
+void PianoRoll::HandleKeys(Pattern &pattern) {
+    const Note *chosen = pattern.Get(touched);
+
+    if (chosen == nullptr) {
+        return;
+    }
+
+    auto pressed = [](int key) {
+        return IsKeyPressed(key) || IsKeyPressedRepeat(key);
+    };
+
+    bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+
+    Note note = *chosen;
+
+    if (pressed(KEY_RIGHT)) {
+        // With Shift the whole note walks, otherwise only its end
+        if (shift) {
+            note.step++;
+        } else {
+            note.length++;
+        }
+    }
+
+    if (pressed(KEY_LEFT)) {
+        if (shift) {
+            note.step = std::max(note.step - 1, 0);
+        } else {
+            note.length = std::max(note.length - 1, 1);
+        }
+    }
+
+    if (pressed(KEY_UP)) {
+        note.pitch += shift ? 12 : 1;
+    }
+
+    if (pressed(KEY_DOWN)) {
+        note.pitch -= shift ? 12 : 1;
+    }
+
+    pattern.Set(touched, note);
+}
+
+// Both scrollbars, at the right and at the bottom like in the engine: the
+// thumb shows how much of the pattern is visible and can be dragged.
+void PianoRoll::HandleScrollbars(Ui &ui, const Grid &grid) {
+    Rectangle timeThumb = TimeThumb(grid);
+    Rectangle pitchThumb = PitchThumb(grid);
+
+    bool onTime = Widgets::Hovered(ui, grid.timeBar);
+    bool onPitch = Widgets::Hovered(ui, grid.pitchBar);
+
+    // A click grabs the thumb. Next to it the thumb jumps to the mouse first,
+    // so a click into the track goes straight to that place.
+    if (ui.clicked && onTime) {
+        drag = Drag::ScrollTime;
+        grabOffset = CheckCollisionPointRec(ui.mouse, timeThumb)
+                         ? ui.mouse.x - timeThumb.x
+                         : timeThumb.width / 2.0f;
+    } else if (ui.clicked && onPitch) {
+        drag = Drag::ScrollPitch;
+        grabOffset = CheckCollisionPointRec(ui.mouse, pitchThumb)
+                         ? ui.mouse.y - pitchThumb.y
+                         : pitchThumb.height / 2.0f;
+    }
+
+    if ((drag == Drag::ScrollTime || drag == Drag::ScrollPitch) && !ui.down) {
+        drag = Drag::None;
+    }
+
+    if (drag == Drag::ScrollTime) {
+        float free = grid.timeBar.width - timeThumb.width;
+        float share = free > 0.0f ? (ui.mouse.x - grabOffset - grid.timeBar.x) / free : 0.0f;
+
+        scroll = std::clamp(share, 0.0f, 1.0f) * std::max(contentSteps - VisibleSteps(grid), 0.0f);
+    }
+
+    if (drag == Drag::ScrollPitch) {
+        float free = grid.pitchBar.height - pitchThumb.height;
+        float share = free > 0.0f ? (ui.mouse.y - grabOffset - grid.pitchBar.y) / free : 0.0f;
+
+        float pitches = static_cast<float>(Pattern::HIGHEST_PITCH - Pattern::LOWEST_PITCH) - VisibleRows(grid) + 1.0f;
+
+        topPitch = Pattern::HIGHEST_PITCH - static_cast<int>(std::round(std::clamp(share, 0.0f, 1.0f) * pitches));
+    }
+
+    DrawScrollbar(ui, grid.timeBar, TimeThumb(grid), drag == Drag::ScrollTime);
+    DrawScrollbar(ui, grid.pitchBar, PitchThumb(grid), drag == Drag::ScrollPitch);
+}
+
+Rectangle PianoRoll::TimeThumb(const Grid &grid) const {
+    float visible = VisibleSteps(grid);
+    float share = std::clamp(visible / std::max(contentSteps, 1.0f), 0.0f, 1.0f);
+
+    float width = std::max(grid.timeBar.width * share, SCROLLBAR_MIN_THUMB);
+    float free = grid.timeBar.width - width;
+    float scrolled = std::max(contentSteps - visible, 0.0f);
+
+    float at = scrolled > 0.0f ? free * std::clamp(scroll / scrolled, 0.0f, 1.0f) : 0.0f;
+
+    return {grid.timeBar.x + at, grid.timeBar.y, width, grid.timeBar.height};
+}
+
+Rectangle PianoRoll::PitchThumb(const Grid &grid) const {
+    float rows = VisibleRows(grid);
+    float pitches = static_cast<float>(Pattern::HIGHEST_PITCH - Pattern::LOWEST_PITCH + 1);
+
+    float share = std::clamp(rows / pitches, 0.0f, 1.0f);
+    float height = std::max(grid.pitchBar.height * share, SCROLLBAR_MIN_THUMB);
+    float free = grid.pitchBar.height - height;
+
+    float scrolled = pitches - rows;
+    float above = static_cast<float>(Pattern::HIGHEST_PITCH - topPitch);
+
+    float at = scrolled > 0.0f ? free * std::clamp(above / scrolled, 0.0f, 1.0f) : 0.0f;
+
+    return {grid.pitchBar.x, grid.pitchBar.y + at, grid.pitchBar.width, height};
+}
+
+void PianoRoll::DrawScrollbar(Ui &ui, Rectangle track, Rectangle thumb, bool held) const {
+    DrawRectangleRec(track, SCROLL_TRACK);
+    DrawRectangleRec(thumb, held ? ui.theme.highlight : SCROLL_THUMB);
 }
 
 void PianoRoll::Forget(std::size_t removed) {

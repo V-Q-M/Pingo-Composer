@@ -4,3 +4,6 @@ build/
 
 # macOS
 .DS_Store
+
+# Backlog and its copy, local only
+log/
