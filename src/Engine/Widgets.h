@@ -24,7 +24,23 @@ struct Ui {
 
     // Where the mouse is and what it did in this frame
     Vector2 mouse{0.0f, 0.0f};
+
+    // Just pressed, held and just let go of the left button
     bool clicked = false;
+    bool down = false;
+    bool released = false;
+
+    // The right button erases where the left one draws
+    bool rightClicked = false;
+    bool rightDown = false;
+
+    // Mouse wheel of this frame, positive is up
+    float wheel = 0.0f;
+
+    // Is a modifier held? Shift and Control change what dragging and the wheel
+    // do, e.g. scrolling sideways instead of up.
+    bool shift = false;
+    bool control = false;
 
     // Set by the widgets: was the mouse over one of them?
     bool hovering = false;

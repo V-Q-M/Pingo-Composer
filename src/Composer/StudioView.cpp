@@ -11,27 +11,19 @@ constexpr float CHANNEL_WIDTH = 84.0f;
 
 constexpr float GAP = 3.0f;
 
-// One beat of the pattern, and how many of them make a bar
-constexpr float BEAT_WIDTH = 16.0f;
-constexpr int BEATS_PER_BAR = 4;
-
-// Height of a row in the pattern, one per half step of the scale
-constexpr float NOTE_HEIGHT = 5.0f;
-
 constexpr int TEMPO_MIN = 40;
 constexpr int TEMPO_MAX = 300;
 constexpr int TEMPO_STEP = 5;
 
 StudioView::StudioView(App &app)
     : View(app) {
-    // The voices of a classic sound chip, as a start
-    channels = {
-        {"PULSE 1"},
-        {"PULSE 2"},
-        {"TRIANGLE"},
-        {"NOISE"},
-        {"SAMPLE"}
-    };
+    // The voices of a classic sound chip, as a start. Every one of them draws
+    // its notes in its own colour.
+    channels.push_back({"PULSE 1", Color{0, 249, 255, 255}, false, {}});
+    channels.push_back({"PULSE 2", Color{61, 255, 20, 255}, false, {}});
+    channels.push_back({"TRIANGLE", Color{255, 229, 26, 255}, false, {}});
+    channels.push_back({"NOISE", Color{188, 190, 202, 255}, false, {}});
+    channels.push_back({"SAMPLE", Color{255, 108, 34, 255}, false, {}});
 }
 
 void StudioView::Update(float dt) {
@@ -184,83 +176,45 @@ void StudioView::DrawChannels(Ui &ui, Rectangle bounds) {
     }
 }
 
-// The pattern of the chosen channel: for now the grid it will be written in
+// The pattern of the chosen channel, as a piano roll
 void StudioView::DrawPattern(Ui &ui, Rectangle bounds) {
     Widgets::Panel(ui, bounds);
 
-    const FontRenderer &font = ui.font;
-    float row = Widgets::RowHeight(font);
+    Channel &channel = channels[current];
+    float row = Widgets::RowHeight(ui.font);
 
     Widgets::Label(
         ui,
         {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING},
-        channels[current].name + " PATTERN",
+        channel.name + (channel.muted ? " PATTERN  MUTED" : " PATTERN"),
         ui.theme.mutedVariant
     );
 
-    Rectangle grid{
+    // How many notes are in it, so an empty pattern is obvious
+    std::size_t notes = channel.pattern.Notes().size();
+    std::string count = std::to_string(notes) + (notes == 1 ? " NOTE" : " NOTES");
+
+    Widgets::Label(
+        ui,
+        {bounds.x + bounds.width - Widgets::RowWidth(ui.font, count), bounds.y + Widgets::PADDING},
+        count,
+        ui.theme.mutedVariant
+    );
+
+    Rectangle area{
         bounds.x + 1.0f,
         bounds.y + row,
         bounds.width - 2.0f,
         bounds.height - row - 1.0f
     };
 
-    Widgets::Sunken(ui, grid);
+    roll.SetPlayhead(position, playing);
+    roll.Draw(ui, area, channel.pattern, channel.colour);
 
-    BeginScissorMode(
-        static_cast<int>(grid.x),
-        static_cast<int>(grid.y),
-        static_cast<int>(grid.width),
-        static_cast<int>(grid.height)
-    );
-
-    // Rows for the notes, a brighter line every octave
-    for (int note = 0; grid.y + static_cast<float>(note) * NOTE_HEIGHT < grid.y + grid.height; note++) {
-        float y = grid.y + static_cast<float>(note) * NOTE_HEIGHT;
-
-        DrawRectangle(
-            static_cast<int>(grid.x),
-            static_cast<int>(y),
-            static_cast<int>(grid.width),
-            1,
-            note % 12 == 0 ? ui.theme.gridAccent : ui.theme.grid
-        );
+    // A click into the ruler of the roll moves the song
+    if (roll.ScrubbedBeats() >= 0.0f) {
+        position = roll.ScrubbedBeats();
     }
-
-    // Columns for the beats, a brighter line at every bar
-    for (int beat = 0; grid.x + static_cast<float>(beat) * BEAT_WIDTH < grid.x + grid.width; beat++) {
-        float x = grid.x + static_cast<float>(beat) * BEAT_WIDTH;
-
-        DrawRectangle(
-            static_cast<int>(x),
-            static_cast<int>(grid.y),
-            1,
-            static_cast<int>(grid.height),
-            beat % BEATS_PER_BAR == 0 ? ui.theme.gridAccent : ui.theme.grid
-        );
-
-        if (beat % BEATS_PER_BAR == 0) {
-            Widgets::Label(
-                ui,
-                {x + 2.0f, grid.y + 2.0f},
-                std::to_string(beat / BEATS_PER_BAR + 1),
-                ui.theme.mutedVariant
-            );
-        }
-    }
-
-    // Where the song stands right now
-    float playhead = grid.x + std::fmod(position, grid.width / BEAT_WIDTH) * BEAT_WIDTH;
-
-    DrawRectangle(
-        static_cast<int>(playhead),
-        static_cast<int>(grid.y),
-        1,
-        static_cast<int>(grid.height),
-        ui.theme.highlight
-    );
-
-    EndScissorMode();
 }
 
 // What the program is doing and which keys are worth knowing
@@ -268,8 +222,8 @@ void StudioView::DrawStatus(Ui &ui, Rectangle bounds) {
     Widgets::Bar(ui, bounds);
 
     std::string state = playing ? "PLAYING" : "STOPPED";
-    std::string bar = std::to_string(static_cast<int>(position) / BEATS_PER_BAR + 1);
-    std::string beat = std::to_string(static_cast<int>(position) % BEATS_PER_BAR + 1);
+    std::string bar = std::to_string(static_cast<int>(position) / Pattern::BEATS_PER_BAR + 1);
+    std::string beat = std::to_string(static_cast<int>(position) % Pattern::BEATS_PER_BAR + 1);
 
     Widgets::Label(
         ui,
@@ -278,7 +232,7 @@ void StudioView::DrawStatus(Ui &ui, Rectangle bounds) {
         playing ? ui.theme.titleVariant : ui.theme.mutedVariant
     );
 
-    std::string keys = "SPACE PLAY   ENTER REWIND   CTRL +- ZOOM " + std::to_string(app.GetScreen().Scale()) + "X";
+    std::string keys = "DRAG DRAW   RIGHT ERASE   WHEEL SCROLL   CTRL WHEEL ZOOM   SPACE PLAY";
 
     Widgets::Label(
         ui,

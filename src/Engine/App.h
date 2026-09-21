@@ -53,6 +53,10 @@ public:
     // Runs until the window is closed
     void Run();
 
+    // One frame: input, the open view, drawing. Run calls this, and so does
+    // a test that wants to drive the program frame by frame.
+    void RunFrame();
+
     // Ends the program after this frame
     void Quit();
 

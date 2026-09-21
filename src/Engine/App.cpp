@@ -15,37 +15,49 @@ App::App(AppOptions options)
 
 void App::Run() {
     while (running && !WindowShouldClose()) {
-        SwitchView();
-
-        screen.Follow();
-        UpdateScale();
-
-        float dt = GetFrameTime();
-
-        Ui ui{font, theme};
-        ui.mouse = screen.MousePosition();
-        ui.clicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
-
-        if (view) {
-            view->Update(dt);
-        }
-
-        screen.BeginDraw(theme.background);
-
-        if (view) {
-            view->Draw(ui);
-        }
-
-        screen.EndDraw();
-
-        // The window only really shows something after a few frames
-        if (!pendingShot.empty() && --shotDelay <= 0) {
-            TakeScreenshot(pendingShot.c_str());
-            pendingShot.clear();
-        }
-
-        SetMouseCursor(ui.hovering ? MOUSE_CURSOR_POINTING_HAND : MOUSE_CURSOR_DEFAULT);
+        RunFrame();
     }
+}
+
+void App::RunFrame() {
+    SwitchView();
+
+    screen.Follow();
+    UpdateScale();
+
+    float dt = GetFrameTime();
+
+    Ui ui{font, theme};
+    ui.mouse = screen.MousePosition();
+    ui.clicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    ui.down = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    ui.released = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
+    ui.rightClicked = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+    ui.rightDown = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
+    ui.wheel = GetMouseWheelMove();
+    ui.shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+    ui.control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ||
+                 IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
+
+    if (view) {
+        view->Update(dt);
+    }
+
+    screen.BeginDraw(theme.background);
+
+    if (view) {
+        view->Draw(ui);
+    }
+
+    screen.EndDraw();
+
+    // The window only really shows something after a few frames
+    if (!pendingShot.empty() && --shotDelay <= 0) {
+        TakeScreenshot(pendingShot.c_str());
+        pendingShot.clear();
+    }
+
+    SetMouseCursor(ui.hovering ? MOUSE_CURSOR_POINTING_HAND : MOUSE_CURSOR_DEFAULT);
 }
 
 void App::SwitchView() {

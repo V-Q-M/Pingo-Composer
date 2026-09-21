@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+#include "Pattern.h"
+#include "PianoRoll.h"
 #include "Engine/View.h"
 
 // The studio: the screen the whole program happens in.
@@ -23,8 +25,13 @@ private:
     struct Channel {
         std::string name;
 
+        // Its notes are drawn in this colour, so channels can be told apart
+        Color colour;
+
         // A muted channel stays in the song but is not heard
         bool muted = false;
+
+        Pattern pattern;
     };
 
     // Where everything sits, worked out from the canvas every frame
@@ -49,6 +56,9 @@ private:
 
     // The channel the pattern belongs to
     std::size_t current = 0;
+
+    // The notes of the chosen channel
+    PianoRoll roll;
 
     bool playing = false;
 
