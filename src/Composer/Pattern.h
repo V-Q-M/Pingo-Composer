@@ -9,6 +9,10 @@
 // Time is counted in steps, pitch like in MIDI: 60 is the C of the fourth
 // octave. That way the notes fit any tempo and any sound chip later.
 struct Note {
+    // Names the note as long as it exists, see Pattern::Add. Notes keep their
+    // id when others are removed, so a selection never points at the wrong one.
+    int id = 0;
+
     int step = 0;
 
     // At least one step long
@@ -48,24 +52,25 @@ public:
     // Is this one of the black keys?
     static bool IsSharp(int pitch);
 
+    // No note: what an empty search gives back
+    static constexpr int NONE = 0;
+
     const std::vector<Note> &Notes() const;
 
-    // The new note, cut to the limits of the pattern
-    std::size_t Add(Note note);
+    // Puts the note in and gives it its id, cut to the limits of the pattern
+    int Add(Note note);
 
-    void Remove(std::size_t index);
+    void Remove(int id);
 
-    // Changes one note, e.g. while dragging it. Out of range indices do
+    // Changes one note, e.g. while dragging it. An id that is gone does
     // nothing, so a note that disappeared cannot break anything.
-    void Set(std::size_t index, Note note);
+    void Set(int id, Note note);
 
-    const Note *Get(std::size_t index) const;
+    const Note *Get(int id) const;
 
-    // The note that sounds at this cell, NOTHING if there is none. Later
-    // notes win, so the one drawn last is found first.
-    static constexpr std::size_t NOTHING = static_cast<std::size_t>(-1);
-
-    std::size_t At(int step, int pitch) const;
+    // The note that sounds at this cell, NONE if there is none. Later notes
+    // win, so the one drawn last is found first.
+    int At(int step, int pitch) const;
 
     // Where the last note ends, 0 for an empty pattern
     int Length() const;
@@ -77,4 +82,8 @@ private:
     static Note Limited(Note note);
 
     std::vector<Note> notes;
+
+    // The id the next note gets. Never counts down, so an id is never given
+    // twice in one pattern.
+    int nextId = 1;
 };

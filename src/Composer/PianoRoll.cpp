@@ -37,6 +37,9 @@ constexpr Color SCROLL_THUMB{255, 255, 255, 150};
 // However little is visible, this much thumb stays to grab
 constexpr float SCROLLBAR_MIN_THUMB = 8.0f;
 
+// The window that chooses notes
+constexpr Color SELECTION_FILL{255, 229, 26, 40};
+
 static Color Shade(Color colour, float factor) {
     return {
         static_cast<unsigned char>(static_cast<float>(colour.r) * factor),
@@ -132,6 +135,14 @@ void PianoRoll::Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour) {
     DrawCells(grid);
     DrawNotes(ui, grid, pattern, colour);
     DrawPlayhead(ui, grid);
+
+    // The window lies above the notes while it is pulled
+    if (drag == Drag::Select) {
+        Rectangle window = SelectionBounds(ui);
+
+        DrawRectangleRec(window, SELECTION_FILL);
+        DrawRectangleLinesEx(window, 1.0f, ui.theme.highlight);
+    }
 
     EndScissorMode();
 
@@ -269,8 +280,7 @@ void PianoRoll::DrawCells(const Grid &grid) const {
 }
 
 void PianoRoll::DrawNotes(Ui &ui, const Grid &grid, const Pattern &pattern, Color colour) const {
-    for (std::size_t i = 0; i < pattern.Notes().size(); i++) {
-        const Note &note = pattern.Notes()[i];
+    for (const Note &note: pattern.Notes()) {
 
         float x = XOf(grid, static_cast<float>(note.step));
         float y = YOf(grid, note.pitch);
@@ -286,7 +296,7 @@ void PianoRoll::DrawNotes(Ui &ui, const Grid &grid, const Pattern &pattern, Colo
         float shade = NOTE_MIN_SHADE + (1.0f - NOTE_MIN_SHADE) * static_cast<float>(note.velocity) / 100.0f;
 
         DrawRectangleRec(bounds, Shade(colour, shade));
-        DrawRectangleLinesEx(bounds, 1.0f, i == touched ? ui.theme.highlight : NOTE_BORDER);
+        DrawRectangleLinesEx(bounds, 1.0f, IsChosen(note.id) ? ui.theme.highlight : NOTE_BORDER);
 
         // The right edge is where the length is changed
         if (bounds.width > 2.0f * EDGE_WIDTH) {
@@ -341,107 +351,10 @@ void PianoRoll::HandleWheel(Ui &ui, const Grid &grid) {
     topPitch += static_cast<int>(ui.wheel) * SCROLL_PITCHES;
 }
 
-void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
-    if (drag == Drag::ScrollTime || drag == Drag::ScrollPitch) {
-        return;
-    }
-
-    bool inside = Widgets::Hovered(ui, grid.area);
-
-    int step = std::max(StepAt(grid, ui.mouse.x), 0);
-    int pitch = PitchAt(grid, ui.mouse.y);
-
-    // Delete takes away what the mouse touched last. Backspace alone belongs
-    // to the transport and rewinds, so it only deletes with Shift.
-    bool erase = IsKeyPressed(KEY_DELETE) ||
-                 (IsKeyPressed(KEY_BACKSPACE) && (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)));
-
-    if (erase && touched != Pattern::NOTHING) {
-        std::size_t removed = touched;
-
-        pattern.Remove(removed);
-        Forget(removed);
-    }
-
-    // The right button erases, also while it is dragged along
-    if (inside && ui.rightDown) {
-        std::size_t under = pattern.At(step, pitch);
-
-        if (under != Pattern::NOTHING) {
-            pattern.Remove(under);
-            Forget(under);
-        }
-
-        return;
-    }
-
-    if (drag == Drag::None && inside && ui.clicked) {
-        std::size_t under = pattern.At(step, pitch);
-
-        if (under == Pattern::NOTHING) {
-            // A new note, one step long. Keeping the button held and moving
-            // right makes it longer right away.
-            Note note;
-            note.step = step;
-            note.pitch = pitch;
-
-            dragNote = pattern.Add(note);
-            dragStart = note;
-            drag = Drag::Create;
-        } else {
-            const Note &note = *pattern.Get(under);
-
-            float start = XOf(grid, static_cast<float>(note.step));
-            float end = XOf(grid, static_cast<float>(note.End()));
-
-            dragNote = under;
-            dragStart = note;
-            grabStep = step;
-            grabPitch = pitch;
-
-            if (ui.mouse.x >= end - EDGE_WIDTH) {
-                drag = Drag::Resize;
-            } else if (ui.mouse.x <= start + EDGE_WIDTH) {
-                drag = Drag::ResizeStart;
-            } else {
-                drag = Drag::Move;
-            }
-        }
-
-        touched = dragNote;
-    }
-
-    if (drag == Drag::Create || drag == Drag::Resize || drag == Drag::ResizeStart || drag == Drag::Move) {
-        Note note = dragStart;
-
-        if (drag == Drag::Create || drag == Drag::Resize) {
-            note.length = std::max(step - note.step + 1, 1);
-        } else if (drag == Drag::ResizeStart) {
-            // The end stays where it is, only the start follows the mouse
-            int start = std::clamp(step, 0, dragStart.End() - 1);
-
-            note.step = start;
-            note.length = dragStart.End() - start;
-        } else {
-            note.step = std::max(dragStart.step + step - grabStep, 0);
-            note.pitch = dragStart.pitch + pitch - grabPitch;
-        }
-
-        pattern.Set(dragNote, note);
-
-        if (!ui.down) {
-            drag = Drag::None;
-            dragNote = Pattern::NOTHING;
-        }
-    }
-}
-
-// The chosen note with the arrow keys: length, place and pitch, without
+// The chosen notes with the arrow keys: length, place and pitch, without
 // aiming with the mouse
 void PianoRoll::HandleKeys(Pattern &pattern) {
-    const Note *chosen = pattern.Get(touched);
-
-    if (chosen == nullptr) {
+    if (chosen.empty()) {
         return;
     }
 
@@ -451,34 +364,79 @@ void PianoRoll::HandleKeys(Pattern &pattern) {
 
     bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
 
-    Note note = *chosen;
+    int steps = 0;
+    int pitches = 0;
+    int length = 0;
 
+    // With Shift the whole note walks, otherwise only its end
     if (pressed(KEY_RIGHT)) {
-        // With Shift the whole note walks, otherwise only its end
-        if (shift) {
-            note.step++;
-        } else {
-            note.length++;
-        }
+        (shift ? steps : length) += 1;
     }
 
     if (pressed(KEY_LEFT)) {
-        if (shift) {
-            note.step = std::max(note.step - 1, 0);
-        } else {
-            note.length = std::max(note.length - 1, 1);
-        }
+        (shift ? steps : length) -= 1;
     }
 
     if (pressed(KEY_UP)) {
-        note.pitch += shift ? 12 : 1;
+        pitches += shift ? 12 : 1;
     }
 
     if (pressed(KEY_DOWN)) {
-        note.pitch -= shift ? 12 : 1;
+        pitches -= shift ? 12 : 1;
     }
 
-    pattern.Set(touched, note);
+    if (steps == 0 && pitches == 0 && length == 0) {
+        return;
+    }
+
+    RememberChosen(pattern);
+    ApplyToChosen(pattern, steps, pitches, length, 0);
+}
+
+bool PianoRoll::IsChosen(int id) const {
+    return std::find(chosen.begin(), chosen.end(), id) != chosen.end();
+}
+
+void PianoRoll::Choose(int id) {
+    if (id != Pattern::NONE && !IsChosen(id)) {
+        chosen.push_back(id);
+    }
+}
+
+void PianoRoll::ChooseNone() {
+    chosen.clear();
+}
+
+void PianoRoll::RememberChosen(const Pattern &pattern) {
+    before.clear();
+
+    for (int id: chosen) {
+        if (const Note *note = pattern.Get(id)) {
+            before[id] = *note;
+        }
+    }
+}
+
+// steps and pitches move the notes, length changes their end and start their
+// beginning. Everything counts from how the notes sat when the drag started.
+void PianoRoll::ApplyToChosen(Pattern &pattern, int steps, int pitches, int length, int start) {
+    for (const auto &[id, was]: before) {
+        Note note = was;
+
+        note.step = std::max(was.step + steps, 0);
+        note.pitch = was.pitch + pitches;
+        note.length = std::max(was.length + length, 1);
+
+        if (start != 0) {
+            // The end stays where it was, the start walks up to it
+            int moved = std::clamp(was.step + start, 0, was.End() - 1);
+
+            note.step = moved;
+            note.length = was.End() - moved;
+        }
+
+        pattern.Set(id, note);
+    }
 }
 
 // Both scrollbars, at the right and at the bottom like in the engine: the
@@ -562,19 +520,142 @@ void PianoRoll::DrawScrollbar(Ui &ui, Rectangle track, Rectangle thumb, bool hel
     DrawRectangleRec(thumb, held ? ui.theme.highlight : SCROLL_THUMB);
 }
 
-void PianoRoll::Forget(std::size_t removed) {
-    if (touched == removed) {
-        touched = Pattern::NOTHING;
-    } else if (touched != Pattern::NOTHING && touched > removed) {
-        touched--;
+void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
+    if (drag == Drag::ScrollTime || drag == Drag::ScrollPitch) {
+        return;
     }
 
-    if (dragNote == removed) {
-        drag = Drag::None;
-        dragNote = Pattern::NOTHING;
-    } else if (dragNote != Pattern::NOTHING && dragNote > removed) {
-        dragNote--;
+    bool inside = Widgets::Hovered(ui, grid.area);
+
+    int step = std::max(StepAt(grid, ui.mouse.x), 0);
+    int pitch = PitchAt(grid, ui.mouse.y);
+
+    // Delete takes away every chosen note. Backspace alone belongs to the
+    // transport and rewinds, so it only deletes with Shift.
+    bool erase = IsKeyPressed(KEY_DELETE) ||
+                 (IsKeyPressed(KEY_BACKSPACE) && ui.shift);
+
+    if (erase && !chosen.empty()) {
+        for (int id: chosen) {
+            pattern.Remove(id);
+        }
+
+        ChooseNone();
     }
+
+    // The right button erases, also while it is dragged along
+    if (inside && ui.rightDown) {
+        int under = pattern.At(step, pitch);
+
+        if (under != Pattern::NONE) {
+            pattern.Remove(under);
+
+            chosen.erase(std::remove(chosen.begin(), chosen.end(), under), chosen.end());
+        }
+
+        return;
+    }
+
+    if (drag == Drag::None && inside && ui.clicked) {
+        int under = pattern.At(step, pitch);
+
+        if (ui.shift) {
+            // Shift pulls a window over the notes it should choose
+            drag = Drag::Select;
+            selectionStart = ui.mouse;
+
+            ChooseNone();
+        } else if (under == Pattern::NONE) {
+            // A new note, one step long. Keeping the button held and moving
+            // right makes it longer right away.
+            Note note;
+            note.step = step;
+            note.pitch = pitch;
+
+            dragNote = pattern.Add(note);
+            dragStart = *pattern.Get(dragNote);
+            drag = Drag::Create;
+
+            ChooseNone();
+            Choose(dragNote);
+            RememberChosen(pattern);
+        } else {
+            const Note &note = *pattern.Get(under);
+
+            float start = XOf(grid, static_cast<float>(note.step));
+            float end = XOf(grid, static_cast<float>(note.End()));
+
+            dragNote = under;
+            dragStart = note;
+            grabStep = step;
+            grabPitch = pitch;
+
+            if (ui.mouse.x >= end - EDGE_WIDTH) {
+                drag = Drag::Resize;
+            } else if (ui.mouse.x <= start + EDGE_WIDTH) {
+                drag = Drag::ResizeStart;
+            } else {
+                drag = Drag::Move;
+            }
+
+            // A note outside the selection becomes the only chosen one, one
+            // inside it takes the whole selection along
+            if (!IsChosen(under)) {
+                ChooseNone();
+                Choose(under);
+            }
+
+            RememberChosen(pattern);
+        }
+    }
+
+    if (drag == Drag::Select) {
+        if (!ui.down) {
+            Rectangle window = SelectionBounds(ui);
+
+            for (const Note &note: pattern.Notes()) {
+                Rectangle bounds{
+                    XOf(grid, static_cast<float>(note.step)),
+                    YOf(grid, note.pitch),
+                    static_cast<float>(note.length) * stepWidth,
+                    PITCH_HEIGHT
+                };
+
+                if (CheckCollisionRecs(window, bounds)) {
+                    Choose(note.id);
+                }
+            }
+
+            drag = Drag::None;
+        }
+
+        return;
+    }
+
+    if (drag == Drag::Create || drag == Drag::Resize || drag == Drag::ResizeStart || drag == Drag::Move) {
+        if (drag == Drag::Create || drag == Drag::Resize) {
+            ApplyToChosen(pattern, 0, 0, step - dragStart.End() + 1, 0);
+        } else if (drag == Drag::ResizeStart) {
+            ApplyToChosen(pattern, 0, 0, 0, step - dragStart.step);
+        } else {
+            ApplyToChosen(pattern, step - grabStep, pitch - grabPitch, 0, 0);
+        }
+
+        if (!ui.down) {
+            drag = Drag::None;
+            dragNote = Pattern::NONE;
+        }
+    }
+}
+
+// The window while it is being pulled, however it was dragged
+Rectangle PianoRoll::SelectionBounds(Ui &ui) const {
+    return {
+        std::min(selectionStart.x, ui.mouse.x),
+        std::min(selectionStart.y, ui.mouse.y),
+        std::abs(ui.mouse.x - selectionStart.x),
+        std::abs(ui.mouse.y - selectionStart.y)
+    };
 }
 
 void PianoRoll::LimitView(const Grid &grid) {

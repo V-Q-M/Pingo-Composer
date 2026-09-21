@@ -44,38 +44,54 @@ Note Pattern::Limited(Note note) {
     return note;
 }
 
-std::size_t Pattern::Add(Note note) {
+int Pattern::Add(Note note) {
+    note.id = nextId++;
+
     notes.push_back(Limited(note));
 
-    return notes.size() - 1;
+    return note.id;
 }
 
-void Pattern::Remove(std::size_t index) {
-    if (index < notes.size()) {
-        notes.erase(notes.begin() + static_cast<long>(index));
+void Pattern::Remove(int id) {
+    for (std::size_t i = 0; i < notes.size(); i++) {
+        if (notes[i].id == id) {
+            notes.erase(notes.begin() + static_cast<long>(i));
+            return;
+        }
     }
 }
 
-void Pattern::Set(std::size_t index, Note note) {
-    if (index < notes.size()) {
-        notes[index] = Limited(note);
+void Pattern::Set(int id, Note note) {
+    for (Note &existing: notes) {
+        if (existing.id == id) {
+            note.id = id;
+            existing = Limited(note);
+
+            return;
+        }
     }
 }
 
-const Note *Pattern::Get(std::size_t index) const {
-    return index < notes.size() ? &notes[index] : nullptr;
+const Note *Pattern::Get(int id) const {
+    for (const Note &note: notes) {
+        if (note.id == id) {
+            return &note;
+        }
+    }
+
+    return nullptr;
 }
 
-std::size_t Pattern::At(int step, int pitch) const {
+int Pattern::At(int step, int pitch) const {
     for (std::size_t i = notes.size(); i > 0; i--) {
         const Note &note = notes[i - 1];
 
         if (note.pitch == pitch && note.Covers(step)) {
-            return i - 1;
+            return note.id;
         }
     }
 
-    return NOTHING;
+    return NONE;
 }
 
 int Pattern::Length() const {

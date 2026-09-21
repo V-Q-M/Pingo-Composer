@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <map>
+#include <vector>
 
 #include "Pattern.h"
 #include "Engine/Widgets.h"
@@ -12,13 +14,14 @@
 //                  right makes the note longer right away.
 //   left button    on a note moves it, on one of its edges it changes its
 //                  length: the left edge keeps the end, the right one the start
+//   Shift + left   pulls a window over several notes and chooses them
 //   right button   erases every note it is dragged over
 //   wheel          scrolls through the pitches, with Shift through the time,
 //                  with Control it zooms the time
 //   scrollbars     at the right and at the bottom, like in the engine
 //
-// The note that was touched last is the chosen one. It is worked on with the
-// keyboard, so a length can be set exactly without aiming with the mouse:
+// Whatever was touched or caught by the window last is chosen. Moving, the
+// length and the keys work on every chosen note at once:
 //   left, right          one step shorter or longer
 //   Shift left, right    moves it one step through the time
 //   up, down             one half step higher or lower, with Shift an octave
@@ -76,6 +79,9 @@ private:
         Resize,
         ResizeStart,
 
+        // The window that chooses several notes
+        Select,
+
         // One of the scrollbars
         ScrollTime,
         ScrollPitch
@@ -118,6 +124,24 @@ private:
 
     void HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern);
 
+    // Everything about the chosen notes
+    bool IsChosen(int id) const;
+
+    void Choose(int id);
+
+    void ChooseNone();
+
+    // Remembers how the chosen notes sit right now, so a drag can move all of
+    // them by the same amount
+    void RememberChosen(const Pattern &pattern);
+
+    // Puts the change of one note onto every chosen note: they all move by the
+    // same steps and half steps, or change their length by the same amount.
+    void ApplyToChosen(Pattern &pattern, int steps, int pitches, int length, int start);
+
+    // The window of the running selection, in pixels
+    Rectangle SelectionBounds(Ui &ui) const;
+
     void HandleWheel(Ui &ui, const Grid &grid);
 
     // The chosen note with the arrow keys, see the comment above the class
@@ -141,11 +165,6 @@ private:
     // Keeps the view inside the pattern and the pitch range
     void LimitView(const Grid &grid);
 
-    // A removed note moves the notes behind it one place forward. Whatever
-    // the roll remembers has to follow, otherwise Delete would hit the wrong
-    // note afterwards.
-    void Forget(std::size_t removed);
-
     // How far the view is scrolled: the first step on the left and the pitch
     // in the top row
     float scroll = 0.0f;
@@ -154,15 +173,22 @@ private:
     float stepWidth = 8.0f;
 
     Drag drag = Drag::None;
-    std::size_t dragNote = Pattern::NOTHING;
+    int dragNote = Pattern::NONE;
 
     // Where the note sat when the drag started, and where it was grabbed
     Note dragStart;
     int grabStep = 0;
     int grabPitch = 0;
 
-    // The note that was touched last: the keyboard works on it
-    std::size_t touched = Pattern::NOTHING;
+    // The chosen notes by their id: the keyboard and dragging work on all of
+    // them. Usually exactly one, several after a selection window.
+    std::vector<int> chosen;
+
+    // How the chosen notes sat when the drag started
+    std::map<int, Note> before;
+
+    // Where the selection window was started
+    Vector2 selectionStart{0.0f, 0.0f};
 
     // How far the pattern reaches, plus room to write. Worked out in Draw, the
     // scrollbar of the time needs it.
