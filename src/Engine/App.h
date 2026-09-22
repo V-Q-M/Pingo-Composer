@@ -104,4 +104,8 @@ private:
     // The name a screenshot is written to, and how many frames it waits
     std::string pendingShot;
     int shotDelay = 0;
+
+    // When and where the last click was, for double clicks
+    double lastClick = 0.0;
+    Vector2 lastClickAt{0.0f, 0.0f};
 };

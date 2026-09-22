@@ -30,6 +30,9 @@ struct Ui {
     bool down = false;
     bool released = false;
 
+    // Two clicks in a row at the same place, e.g. to open something
+    bool doubleClicked = false;
+
     // The right button erases where the left one draws
     bool rightClicked = false;
     bool rightDown = false;

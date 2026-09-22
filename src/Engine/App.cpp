@@ -6,6 +6,10 @@
 // needs about a second until it really shows the program
 constexpr int SHOT_DELAY = 60;
 
+// Two clicks count as a double click within this time and this distance
+constexpr double DOUBLE_CLICK_SECONDS = 0.35;
+constexpr float DOUBLE_CLICK_DISTANCE = 3.0f;
+
 App::App(AppOptions options)
     : options(std::move(options)),
       window(this->options.windowWidth, this->options.windowHeight, this->options.title),
@@ -38,6 +42,18 @@ void App::RunFrame() {
     ui.shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
     ui.control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ||
                  IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
+
+    if (ui.clicked) {
+        double now = GetTime();
+
+        ui.doubleClicked = now - lastClick < DOUBLE_CLICK_SECONDS &&
+                           CheckCollisionPointCircle(ui.mouse, lastClickAt, DOUBLE_CLICK_DISTANCE);
+
+        // After a double click the next one starts fresh, so three clicks are
+        // not two double clicks
+        lastClick = ui.doubleClicked ? 0.0 : now;
+        lastClickAt = ui.mouse;
+    }
 
     if (view) {
         view->Update(dt);

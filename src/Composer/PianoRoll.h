@@ -19,6 +19,7 @@
 //   wheel          scrolls through the pitches, with Shift through the time,
 //                  with Control it zooms the time
 //   scrollbars     at the right and at the bottom, like in the engine
+//   piano keys     light up under the mouse, holding one asks for its sound
 //
 // Whatever was touched or caught by the window last is chosen. Moving, the
 // length and the keys work on every chosen note at once:
@@ -64,6 +65,26 @@ public:
     // Beats the mouse asked for by clicking into the ruler, -1 for none.
     // The view above decides what happens, e.g. jumping there.
     float ScrubbedBeats() const;
+
+    // A note the roll would like to hear, e.g. because a key was pressed or a
+    // note was written. The view above owns the sound and plays it.
+    struct Preview {
+        // 0 for nothing to play
+        int pitch = 0;
+
+        // How long it should sound in steps, 0 for as long as the key is held
+        int steps = 0;
+
+        // The held key was let go, whatever is sounding should stop
+        bool stop = false;
+    };
+
+    // What the roll asked for in this frame, see Preview
+    const Preview &Asked() const;
+
+    // A double click into the roll asks to close it. The note the first click
+    // wrote is taken back, so closing leaves nothing behind.
+    bool ClosingAsked() const;
 
 private:
     // What the left button is doing right now
@@ -142,6 +163,9 @@ private:
     // The window of the running selection, in pixels
     Rectangle SelectionBounds(Ui &ui) const;
 
+    // The keys on the left: light up under the mouse, sound while held
+    void HandleKeyboard(Ui &ui, const Grid &grid);
+
     void HandleWheel(Ui &ui, const Grid &grid);
 
     // The chosen note with the arrow keys, see the comment above the class
@@ -201,4 +225,15 @@ private:
     bool following = false;
 
     float scrubbed = -1.0f;
+
+    Preview asked;
+
+    bool closing = false;
+
+    // The note the last click wrote, so a double click can take it back
+    int justCreated = Pattern::NONE;
+
+    // The key the mouse is on and the one it holds down, 0 for none
+    int hoveredKey = 0;
+    int heldKey = 0;
 };

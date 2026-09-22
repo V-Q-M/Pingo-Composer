@@ -9,6 +9,10 @@ constexpr Color ROLL_WHITE_KEY{72, 70, 92, 255};
 constexpr Color ROLL_BLACK_KEY{28, 26, 42, 255};
 constexpr Color ROLL_KEY_BORDER{18, 16, 28, 255};
 
+// A key the mouse is on is a little brighter
+constexpr Color ROLL_WHITE_KEY_HOVER{116, 114, 140, 255};
+constexpr Color ROLL_BLACK_KEY_HOVER{60, 58, 80, 255};
+
 // How much of the width a black key takes
 constexpr float BLACK_KEY_SHARE = 0.6f;
 
@@ -58,6 +62,14 @@ float PianoRoll::ScrubbedBeats() const {
     return scrubbed;
 }
 
+const PianoRoll::Preview &PianoRoll::Asked() const {
+    return asked;
+}
+
+bool PianoRoll::ClosingAsked() const {
+    return closing;
+}
+
 PianoRoll::Grid PianoRoll::LayoutFor(Rectangle bounds) const {
     Grid grid;
 
@@ -102,6 +114,8 @@ void PianoRoll::Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour) {
     Grid grid = LayoutFor(bounds);
 
     scrubbed = -1.0f;
+    asked = Preview{};
+    closing = false;
 
     // Behind the last note there is always room for more
     contentSteps = std::max(
@@ -120,6 +134,7 @@ void PianoRoll::Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour) {
     }
 
     HandleWheel(ui, grid);
+    HandleKeyboard(ui, grid);
     HandleKeys(pattern);
     HandleScrollbars(ui, grid);
     HandleMouse(ui, grid, pattern);
@@ -171,8 +186,16 @@ void PianoRoll::DrawKeys(Ui &ui, const Grid &grid) const {
         float width = grid.keys.width - 1.0f;
         Rectangle key{grid.keys.x, y, sharp ? width * BLACK_KEY_SHARE : width, PITCH_HEIGHT};
 
+        Color colour = sharp ? ROLL_BLACK_KEY : ROLL_WHITE_KEY;
+
+        if (pitch == heldKey) {
+            colour = ui.theme.highlight;
+        } else if (pitch == hoveredKey) {
+            colour = sharp ? ROLL_BLACK_KEY_HOVER : ROLL_WHITE_KEY_HOVER;
+        }
+
         DrawRectangleRec({grid.keys.x, y, width, PITCH_HEIGHT}, ROLL_KEY_BORDER);
-        DrawRectangleRec(key, sharp ? ROLL_BLACK_KEY : ROLL_WHITE_KEY);
+        DrawRectangleRec(key, colour);
         DrawRectangleLinesEx(key, 1.0f, ROLL_KEY_BORDER);
 
         // Only the C of an octave is written out, everything else would be noise
@@ -187,6 +210,31 @@ void PianoRoll::DrawKeys(Ui &ui, const Grid &grid) const {
     }
 
     EndScissorMode();
+}
+
+// The keys on the left are an instrument of their own: the one under the
+// mouse lights up, and holding it asks for its sound.
+void PianoRoll::HandleKeyboard(Ui &ui, const Grid &grid) {
+    bool inside = Widgets::Hovered(ui, grid.keys);
+
+    hoveredKey = inside ? PitchAt(grid, ui.mouse.y) : 0;
+
+    if (hoveredKey < Pattern::LOWEST_PITCH || hoveredKey > Pattern::HIGHEST_PITCH) {
+        hoveredKey = 0;
+    }
+
+    if (inside && ui.clicked && hoveredKey != 0) {
+        heldKey = hoveredKey;
+
+        asked.pitch = heldKey;
+        asked.steps = 0;
+    }
+
+    // The sound stops as soon as the button is let go, wherever the mouse is
+    if (heldKey != 0 && !ui.down) {
+        heldKey = 0;
+        asked.stop = true;
+    }
 }
 
 // Bars above the grid, and where the song stands
@@ -575,10 +623,15 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
             dragNote = pattern.Add(note);
             dragStart = *pattern.Get(dragNote);
             drag = Drag::Create;
+            justCreated = dragNote;
 
             ChooseNone();
             Choose(dragNote);
             RememberChosen(pattern);
+
+            // A written note is heard right away, as long as it is
+            asked.pitch = note.pitch;
+            asked.steps = note.length;
         } else {
             const Note &note = *pattern.Get(under);
 
@@ -597,6 +650,25 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
             } else {
                 drag = Drag::Move;
             }
+
+            // Two clicks on the same free cell close the roll: the second one
+            // lands on the note the first one wrote. It goes with it, so
+            // closing leaves nothing behind. Everything else, e.g. writing a
+            // note and grabbing its edge right away, stays editing.
+            if (ui.doubleClicked && under == justCreated) {
+                closing = true;
+
+                pattern.Remove(under);
+                chosen.erase(std::remove(chosen.begin(), chosen.end(), under), chosen.end());
+
+                drag = Drag::None;
+                dragNote = Pattern::NONE;
+                justCreated = Pattern::NONE;
+
+                return;
+            }
+
+            justCreated = Pattern::NONE;
 
             // A note outside the selection becomes the only chosen one, one
             // inside it takes the whole selection along
@@ -642,6 +714,17 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
         }
 
         if (!ui.down) {
+            // A note that was pulled longer is heard in its full length. It
+            // was drawn, not clicked, so no double click can take it back.
+            if (drag == Drag::Create) {
+                if (const Note *written = pattern.Get(dragNote); written != nullptr && written->length > 1) {
+                    asked.pitch = written->pitch;
+                    asked.steps = written->length;
+
+                    justCreated = Pattern::NONE;
+                }
+            }
+
             drag = Drag::None;
             dragNote = Pattern::NONE;
         }
