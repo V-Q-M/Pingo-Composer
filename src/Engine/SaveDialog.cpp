@@ -9,4 +9,8 @@ std::string AskWhereToSave(const std::string &suggested, const std::vector<std::
     return suggested;
 }
 
+std::string AskWhatToOpen(const std::vector<std::string> &) {
+    return "";
+}
+
 #endif

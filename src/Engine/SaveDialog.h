@@ -14,3 +14,7 @@
 // the endings that may be chosen, e.g. {"wav", "mid"}. The answer is the whole
 // path, empty when the panel was cancelled.
 std::string AskWhereToSave(const std::string &suggested, const std::vector<std::string> &extensions);
+
+// The same the other way round: which file should be opened. Empty when the
+// panel was cancelled.
+std::string AskWhatToOpen(const std::vector<std::string> &extensions);

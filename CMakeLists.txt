@@ -36,8 +36,9 @@ endif ()
 target_include_directories(PingoComposer PRIVATE ${PROJECT_SOURCE_DIR}/src)
 
 find_package(raylib REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
-target_link_libraries(PingoComposer PRIVATE raylib)
+target_link_libraries(PingoComposer PRIVATE raylib nlohmann_json::nlohmann_json)
 
 if (NOT MSVC)
     target_compile_options(PingoComposer PRIVATE -Wall -Wextra)

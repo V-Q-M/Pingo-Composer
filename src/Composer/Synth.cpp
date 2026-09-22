@@ -22,6 +22,34 @@ constexpr float PULSE_DUTY = 0.25f;
 constexpr float TUNING_HERTZ = 440.0f;
 constexpr int TUNING_PITCH = 69;
 
+const char *Synth::WaveName(Wave wave) {
+    switch (wave) {
+        case Wave::Square:
+            return "square";
+
+        case Wave::Pulse:
+            return "pulse";
+
+        case Wave::Triangle:
+            return "triangle";
+
+        case Wave::Noise:
+            return "noise";
+    }
+
+    return "square";
+}
+
+Synth::Wave Synth::WaveFromName(const std::string &name) {
+    for (Wave wave: {Wave::Square, Wave::Pulse, Wave::Triangle, Wave::Noise}) {
+        if (name == WaveName(wave)) {
+            return wave;
+        }
+    }
+
+    return Wave::Square;
+}
+
 Synth::Synth() {
     if (!IsAudioDeviceReady()) {
         return;

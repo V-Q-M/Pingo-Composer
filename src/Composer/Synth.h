@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 
 #include "raylib.h"
 
@@ -35,6 +36,12 @@ public:
 
     // Voices that can sound at the same time
     static constexpr std::size_t VOICES = 8;
+
+    // Name of a wave in files, e.g. "triangle"
+    static const char *WaveName(Wave wave);
+
+    // The wave for a name, square for anything unknown
+    static Wave WaveFromName(const std::string &name);
 
     Synth();
 

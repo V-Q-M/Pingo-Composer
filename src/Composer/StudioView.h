@@ -71,12 +71,25 @@ private:
     // The pattern the roll works on, made if it does not exist yet
     Pattern &CurrentPattern();
 
-    // Writes the song, or the open pattern, into a file the user picks. The
-    // ending of the name decides whether it becomes sound or notes.
+    // Writes the song, or the open pattern, as sound or as notes. The ending
+    // of the name the user picks decides which of the two.
     void Export();
 
-    // What the last export did, shown in the status line
+    // Writes the whole song into a file of our own, so work can go on later.
+    // The first time it asks where, after that it writes there again.
+    void Save();
+
+    // Reads a song of our own, or the notes of a midi file
+    void Open();
+
+    // Starts over after a song was read
+    void AfterLoading();
+
+    // What the last save, export or open did, shown in the status line
     std::string report;
+
+    // Where the song was saved, empty as long as it has no file yet
+    std::string songFile;
 
     std::vector<Channel> channels;
 

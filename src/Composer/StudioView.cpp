@@ -2,7 +2,9 @@
 
 #include <cmath>
 
+#include "MidiFile.h"
 #include "SongExport.h"
+#include "SongFile.h"
 #include "Engine/App.h"
 #include "Engine/SaveDialog.h"
 
@@ -36,6 +38,68 @@ StudioView::StudioView(App &app)
     add("TRIANGLE", Color{255, 229, 26, 255}, Synth::Wave::Triangle);
     add("NOISE", Color{188, 190, 202, 255}, Synth::Wave::Noise);
     add("SAMPLE", Color{255, 108, 34, 255}, Synth::Wave::Square);
+}
+
+// The name of a file without its folders, for the title
+static std::string NameOf(const std::string &path) {
+    std::size_t slash = path.find_last_of('/');
+
+    return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+// Writes the whole song, so work can go on later. Only the first time asks
+// where it should go.
+void StudioView::Save() {
+    if (songFile.empty()) {
+        songFile = AskWhereToSave(std::string("song.") + SongFile::EXTENSION, {SongFile::EXTENSION});
+    }
+
+    if (songFile.empty()) {
+        return;
+    }
+
+    bool written = SongFile::Save(songFile, channels, tempo);
+
+    report = written ? "SAVED " + NameOf(songFile) : "COULD NOT SAVE";
+
+    if (!written) {
+        songFile.clear();
+    }
+}
+
+// Reads a song of our own, or the notes of a midi file
+void StudioView::Open() {
+    std::string file = AskWhatToOpen({SongFile::EXTENSION, MidiFile::EXTENSION});
+
+    if (file.empty()) {
+        return;
+    }
+
+    bool midi = file.size() > 4 && file.compare(file.size() - 4, 4, ".mid") == 0;
+    bool read = midi ? MidiFile::Load(file, channels, tempo) : SongFile::Load(file, channels, tempo);
+
+    if (!read) {
+        report = "COULD NOT OPEN " + NameOf(file);
+        return;
+    }
+
+    // Notes from somewhere else have no file of ours yet, so saving asks again
+    songFile = midi ? "" : file;
+
+    AfterLoading();
+
+    report = (midi ? "IMPORTED " : "OPENED ") + NameOf(file);
+}
+
+// Everything that pointed into the old song starts over
+void StudioView::AfterLoading() {
+    current = 0;
+    currentPattern = 0;
+    rollOpen = false;
+    playing = false;
+    position = 0.0f;
+
+    RestartPlayback();
 }
 
 // The whole song, or only the pattern that is open: whatever is on the screen
@@ -170,7 +234,15 @@ void StudioView::Update(float dt) {
                    IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
 
     if (control && IsKeyPressed(KEY_S)) {
+        Save();
+    }
+
+    if (control && IsKeyPressed(KEY_E)) {
         Export();
+    }
+
+    if (control && IsKeyPressed(KEY_O)) {
+        Open();
     }
 
     // Backspace rewinds. With Shift it belongs to the roll and deletes a note.
@@ -294,20 +366,34 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
         tempo = std::min(tempo + TEMPO_STEP, TEMPO_MAX);
     }
 
-    // Saving sits at the right end of the row, next to the name
+    // Opening, saving and exporting sit at the right end of the row
+    float exportWidth = Widgets::RowWidth(font, "WAV");
     float saveWidth = row;
-    float saveX = bounds.width - saveWidth - GAP;
+    float openWidth = Widgets::RowWidth(font, "OPEN");
+
+    float exportX = bounds.width - exportWidth - GAP;
+    float saveX = exportX - saveWidth - 2.0f;
+    float openX = saveX - openWidth - 2.0f;
+
+    if (Widgets::Button(ui, {openX, y, openWidth, row}, "OPEN")) {
+        Open();
+    }
 
     if (Widgets::Button(ui, {saveX, y, saveWidth, row}, std::string(1, FontRenderer::ICON_SAVE))) {
+        Save();
+    }
+
+    if (Widgets::Button(ui, {exportX, y, exportWidth, row}, "WAV")) {
         Export();
     }
 
-    // The name of the song on the right, cyan like the titles of the engine
-    std::string title = "UNTITLED SONG";
+    // The name of the song on the left of them, cyan like the titles of the
+    // engine
+    std::string title = songFile.empty() ? "UNTITLED SONG" : NameOf(songFile);
 
     Widgets::Label(
         ui,
-        {saveX - Widgets::RowWidth(font, title), y + Widgets::PADDING},
+        {openX - Widgets::RowWidth(font, title), y + Widgets::PADDING},
         title,
         ui.theme.titleVariant
     );
@@ -437,8 +523,8 @@ void StudioView::DrawStatus(Ui &ui, Rectangle bounds) {
     );
 
     std::string keys = rollOpen
-                           ? "DRAG DRAW   ARROWS EDIT   CTRL S SAVES THE PATTERN"
-                           : "DRAG BLOCKS   WHEEL PATTERN   CTRL S SAVES THE SONG";
+                           ? "DRAG DRAW   ARROWS EDIT   CTRL E EXPORTS THE PATTERN"
+                           : "DRAG BLOCKS   WHEEL PATTERN   CTRL O OPEN   CTRL S SAVE";
 
     Widgets::Label(
         ui,
