@@ -1,8 +1,11 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
+#include "Arranger.h"
+#include "Channel.h"
 #include "Pattern.h"
 #include "PianoRoll.h"
 #include "Synth.h"
@@ -11,11 +14,13 @@
 // The studio: the screen the whole program happens in.
 //
 // At the top the transport bar with play and tempo, on the left the channels,
-// at the bottom the status line. A double click on a channel opens its piano
-// roll in the middle, a double click inside the roll closes it again.
+// at the bottom the status line. In the middle stands the arrangement: which
+// pattern of a channel plays in which bar. A double click on a channel or on
+// one of its blocks opens the piano roll there, a double click on the channel
+// closes it again.
 //
-// While the song plays, the notes of every channel that is not muted sound as
-// the playhead reaches them.
+// While the song plays, every channel that is not muted sounds what its
+// arrangement says.
 class StudioView : public View {
 public:
     explicit StudioView(App &app);
@@ -25,27 +30,14 @@ public:
     void Draw(Ui &ui) override;
 
 private:
-    // A channel of the song, e.g. one of the two pulse voices of a NES
-    struct Channel {
-        std::string name;
-
-        // Its notes are drawn in this colour, so channels can be told apart
-        Color colour;
-
-        // How it sounds, see Synth
-        Synth::Wave wave = Synth::Wave::Square;
-
-        // A muted channel stays in the song but is not heard
-        bool muted = false;
-
-        Pattern pattern;
-    };
-
     // Where everything sits, worked out from the canvas every frame
     struct Layout {
         Rectangle transport;
         Rectangle channels;
-        Rectangle pattern;
+
+        // The arrangement, or the piano roll while one is open
+        Rectangle middle;
+
         Rectangle status;
     };
 
@@ -55,17 +47,42 @@ private:
 
     void DrawChannels(Ui &ui, Rectangle bounds);
 
+    // The piano roll of the pattern that is open
     void DrawPattern(Ui &ui, Rectangle bounds);
+
+    // The arrangement of the whole song
+    void DrawArrangement(Ui &ui, Rectangle bounds);
 
     void DrawStatus(Ui &ui, Rectangle bounds);
 
+    // Plays what the roll asked for, see PianoRoll::Preview
+    void PlayPreview(const PianoRoll::Preview &asked);
+
+    // Starts every note the playhead has reached since the last frame
+    void PlayReachedNotes();
+
+    // Starts listening again from where the playhead stands, e.g. after a
+    // jump. The note right under it belongs to the new place and sounds.
+    void RestartPlayback();
+
+    // How long a step lasts at the tempo right now
+    float SecondsPerStep() const;
+
+    // The pattern the roll works on, made if it does not exist yet
+    Pattern &CurrentPattern();
+
     std::vector<Channel> channels;
 
-    // The channel the pattern belongs to
+    // The channel and the pattern the roll works on
     std::size_t current = 0;
+    int currentPattern = 0;
 
-    // The notes of the chosen channel
+    // Is a piano roll open in the middle?
+    bool rollOpen = false;
+
     PianoRoll roll;
+
+    Arranger arranger;
 
     // What the keys and the written notes sound like
     Synth synth;
@@ -73,20 +90,9 @@ private:
     // The voice a held key sounds on, so it can be let go again
     int heldVoice = Synth::NO_VOICE;
 
-    // Plays what the roll asked for, see PianoRoll::Preview
-    void PlayPreview(const PianoRoll::Preview &asked);
-
-    // Starts every note the playhead has just reached
-    void PlayPassedNotes(float from, float to);
-
-    // The empty middle while no roll is open
-    void DrawEmpty(Ui &ui, Rectangle bounds);
-
-    // How long a step lasts at the tempo right now
-    float SecondsPerStep() const;
-
-    // Is a piano roll open in the middle?
-    bool rollOpen = false;
+    // The last step that was played already. -1 means that nothing was
+    // played yet, so a note right at the start is not missed.
+    int playedThrough = -1;
 
     bool playing = false;
 

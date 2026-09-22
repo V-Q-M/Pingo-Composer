@@ -19,11 +19,27 @@ StudioView::StudioView(App &app)
     : View(app) {
     // The voices of a classic sound chip, as a start. Every one of them draws
     // its notes in its own colour.
-    channels.push_back({"PULSE 1", Color{0, 249, 255, 255}, Synth::Wave::Square, false, {}});
-    channels.push_back({"PULSE 2", Color{61, 255, 20, 255}, Synth::Wave::Pulse, false, {}});
-    channels.push_back({"TRIANGLE", Color{255, 229, 26, 255}, Synth::Wave::Triangle, false, {}});
-    channels.push_back({"NOISE", Color{188, 190, 202, 255}, Synth::Wave::Noise, false, {}});
-    channels.push_back({"SAMPLE", Color{255, 108, 34, 255}, Synth::Wave::Square, false, {}});
+    auto add = [this](const std::string &name, Color colour, Synth::Wave wave) {
+        Channel channel;
+
+        channel.name = name;
+        channel.colour = colour;
+        channel.wave = wave;
+
+        channels.push_back(std::move(channel));
+    };
+
+    add("PULSE 1", Color{0, 249, 255, 255}, Synth::Wave::Square);
+    add("PULSE 2", Color{61, 255, 20, 255}, Synth::Wave::Pulse);
+    add("TRIANGLE", Color{255, 229, 26, 255}, Synth::Wave::Triangle);
+    add("NOISE", Color{188, 190, 202, 255}, Synth::Wave::Noise);
+    add("SAMPLE", Color{255, 108, 34, 255}, Synth::Wave::Square);
+}
+
+Pattern &StudioView::CurrentPattern() {
+    Channel &channel = channels[current];
+
+    return channel.patterns[static_cast<std::size_t>(channel.Reserve(currentPattern))];
 }
 
 float StudioView::SecondsPerStep() const {
@@ -54,12 +70,15 @@ void StudioView::PlayPreview(const PianoRoll::Preview &asked) {
     }
 }
 
-// Every note that starts between the two places is started now
-void StudioView::PlayPassedNotes(float from, float to) {
-    int first = static_cast<int>(std::floor(from * static_cast<float>(Pattern::STEPS_PER_BEAT)));
-    int last = static_cast<int>(std::floor(to * static_cast<float>(Pattern::STEPS_PER_BEAT)));
+// Every note that begins in a step the playhead has reached is started now.
+// The steps are counted, not the places: that way the note in the very first
+// step sounds as well.
+void StudioView::PlayReachedNotes() {
+    const int stepsPerBar = Pattern::STEPS_PER_BEAT * Pattern::BEATS_PER_BAR;
 
-    if (last <= first) {
+    int reached = static_cast<int>(std::floor(position * static_cast<float>(Pattern::STEPS_PER_BEAT)));
+
+    if (reached <= playedThrough) {
         return;
     }
 
@@ -68,33 +87,53 @@ void StudioView::PlayPassedNotes(float from, float to) {
             continue;
         }
 
-        for (const Note &note: channel.pattern.Notes()) {
-            if (note.step > first && note.step <= last) {
-                synth.Play(note.pitch, channel.wave, static_cast<float>(note.length) * SecondsPerStep());
+        // A block says from which bar its pattern plays, the notes count from
+        // there
+        for (int bar = 0; bar < static_cast<int>(channel.bars.size()); bar++) {
+            const Pattern *pattern = channel.At(bar);
+
+            if (pattern == nullptr) {
+                continue;
+            }
+
+            int start = bar * stepsPerBar;
+
+            for (const Note &note: pattern->Notes()) {
+                int at = start + note.step;
+
+                if (at > playedThrough && at <= reached) {
+                    synth.Play(note.pitch, channel.wave, static_cast<float>(note.length) * SecondsPerStep());
+                }
             }
         }
     }
+
+    playedThrough = reached;
+}
+
+// Nothing before this place counts as played, so the step under the playhead
+// is heard again
+void StudioView::RestartPlayback() {
+    playedThrough = static_cast<int>(std::floor(position * static_cast<float>(Pattern::STEPS_PER_BEAT))) - 1;
+
+    synth.StopAll();
 }
 
 void StudioView::Update(float dt) {
     synth.Update();
 
     if (playing) {
-        float before = position;
+        PlayReachedNotes();
 
         position += dt * static_cast<float>(tempo) / 60.0f;
-
-        PlayPassedNotes(before, position);
     }
 
     // Space starts and stops, like in every other program
     if (IsKeyPressed(KEY_SPACE)) {
         playing = !playing;
 
-        // Nothing keeps ringing after the stop
-        if (!playing) {
-            synth.StopAll();
-        }
+        // Starting listens from here on, stopping lets nothing ring on
+        RestartPlayback();
     }
 
     // Backspace rewinds. With Shift it belongs to the roll and deletes a note.
@@ -103,8 +142,7 @@ void StudioView::Update(float dt) {
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) || (IsKeyPressed(KEY_BACKSPACE) && !shift)) {
         position = 0.0f;
 
-        // The note before the jump does not belong to the new place
-        synth.StopAll();
+        RestartPlayback();
     }
 }
 
@@ -121,7 +159,7 @@ StudioView::Layout StudioView::LayoutFor(const Ui &) const {
     float bottom = layout.status.y - GAP;
 
     layout.channels = {GAP, top, CHANNEL_WIDTH, bottom - top};
-    layout.pattern = {
+    layout.middle = {
         layout.channels.x + layout.channels.width + GAP,
         top,
         width - layout.channels.width - 3.0f * GAP,
@@ -138,19 +176,40 @@ void StudioView::Draw(Ui &ui) {
     DrawChannels(ui, layout.channels);
 
     if (rollOpen) {
-        DrawPattern(ui, layout.pattern);
+        DrawPattern(ui, layout.middle);
     } else {
-        DrawEmpty(ui, layout.pattern);
+        DrawArrangement(ui, layout.middle);
     }
 
     DrawStatus(ui, layout.status);
 }
 
-// Nothing is open: only the hint how a pattern is opened
-void StudioView::DrawEmpty(Ui &ui, Rectangle bounds) {
+// The arrangement: which pattern of a channel plays in which bar
+void StudioView::DrawArrangement(Ui &ui, Rectangle bounds) {
     Widgets::Panel(ui, bounds);
 
-    Widgets::CenteredLabel(ui, bounds, "DOUBLE CLICK A CHANNEL", ui.theme.mutedVariant);
+    float row = Widgets::RowHeight(ui.font);
+
+    Widgets::Label(ui, {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING}, "ARRANGEMENT",
+                   ui.theme.mutedVariant);
+
+    Rectangle area{bounds.x + 1.0f, bounds.y + row, bounds.width - 2.0f, bounds.height - row - 1.0f};
+
+    arranger.SetPlayhead(position);
+    arranger.Draw(ui, area, channels);
+
+    // A double click on a block opens its pattern in the roll
+    if (arranger.OpenedChannel() != Arranger::NOTHING) {
+        current = static_cast<std::size_t>(arranger.OpenedChannel());
+        currentPattern = channels[current].bars[static_cast<std::size_t>(arranger.OpenedBar())];
+        rollOpen = true;
+    }
+
+    if (arranger.ScrubbedBeats() >= 0.0f) {
+        position = arranger.ScrubbedBeats();
+
+        RestartPlayback();
+    }
 }
 
 // Play, stop and the tempo, plus the name of the song
@@ -174,7 +233,7 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
         playing = false;
         position = 0.0f;
 
-        synth.StopAll();
+        RestartPlayback();
     }
 
     // Tempo with a minus and a plus next to the number
@@ -244,11 +303,13 @@ void StudioView::DrawChannels(Ui &ui, Rectangle bounds) {
         );
 
         if (hovered && ui.clicked) {
+            // A single click shows this channel, a double click opens the roll
+            // and closes it again. The first of the two clicks has already
+            // switched the channel, so the second one only switches the roll.
             current = i;
 
-            // A double click opens the roll of this channel
             if (ui.doubleClicked) {
-                rollOpen = true;
+                rollOpen = !rollOpen;
             }
         }
 
@@ -268,17 +329,21 @@ void StudioView::DrawPattern(Ui &ui, Rectangle bounds) {
     Widgets::Panel(ui, bounds);
 
     Channel &channel = channels[current];
+    Pattern &pattern = CurrentPattern();
+
     float row = Widgets::RowHeight(ui.font);
+
+    std::string title = channel.name + " " + std::to_string(currentPattern + 1);
 
     Widgets::Label(
         ui,
         {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING},
-        channel.name + (channel.muted ? " PATTERN  MUTED" : " PATTERN"),
+        channel.muted ? title + "  MUTED" : title,
         ui.theme.mutedVariant
     );
 
     // How many notes are in it, so an empty pattern is obvious
-    std::size_t notes = channel.pattern.Notes().size();
+    std::size_t notes = pattern.Notes().size();
     std::string count = std::to_string(notes) + (notes == 1 ? " NOTE" : " NOTES");
 
     Widgets::Label(
@@ -296,18 +361,15 @@ void StudioView::DrawPattern(Ui &ui, Rectangle bounds) {
     };
 
     roll.SetPlayhead(position, playing);
-    roll.Draw(ui, area, channel.pattern, channel.colour);
+    roll.Draw(ui, area, pattern, channel.colour);
 
     PlayPreview(roll.Asked());
-
-    // A double click inside the roll closes it again
-    if (roll.ClosingAsked()) {
-        rollOpen = false;
-    }
 
     // A click into the ruler of the roll moves the song
     if (roll.ScrubbedBeats() >= 0.0f) {
         position = roll.ScrubbedBeats();
+
+        RestartPlayback();
     }
 }
 
@@ -327,8 +389,8 @@ void StudioView::DrawStatus(Ui &ui, Rectangle bounds) {
     );
 
     std::string keys = rollOpen
-                           ? "DRAG DRAW   RIGHT ERASE   ARROWS EDIT   DOUBLE CLICK CLOSE   SPACE PLAY"
-                           : "DOUBLE CLICK A CHANNEL   BACKSPACE REWIND   SPACE PLAY";
+                           ? "DRAG DRAW   RIGHT ERASE   ARROWS EDIT   DOUBLE CLICK CHANNEL CLOSES"
+                           : "DRAG BLOCKS   RIGHT ERASE   WHEEL PATTERN   DOUBLE CLICK OPENS";
 
     Widgets::Label(
         ui,

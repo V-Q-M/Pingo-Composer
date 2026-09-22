@@ -66,10 +66,6 @@ const PianoRoll::Preview &PianoRoll::Asked() const {
     return asked;
 }
 
-bool PianoRoll::ClosingAsked() const {
-    return closing;
-}
-
 PianoRoll::Grid PianoRoll::LayoutFor(Rectangle bounds) const {
     Grid grid;
 
@@ -115,7 +111,6 @@ void PianoRoll::Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour) {
 
     scrubbed = -1.0f;
     asked = Preview{};
-    closing = false;
 
     // Behind the last note there is always room for more
     contentSteps = std::max(
@@ -623,7 +618,6 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
             dragNote = pattern.Add(note);
             dragStart = *pattern.Get(dragNote);
             drag = Drag::Create;
-            justCreated = dragNote;
 
             ChooseNone();
             Choose(dragNote);
@@ -650,25 +644,6 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
             } else {
                 drag = Drag::Move;
             }
-
-            // Two clicks on the same free cell close the roll: the second one
-            // lands on the note the first one wrote. It goes with it, so
-            // closing leaves nothing behind. Everything else, e.g. writing a
-            // note and grabbing its edge right away, stays editing.
-            if (ui.doubleClicked && under == justCreated) {
-                closing = true;
-
-                pattern.Remove(under);
-                chosen.erase(std::remove(chosen.begin(), chosen.end(), under), chosen.end());
-
-                drag = Drag::None;
-                dragNote = Pattern::NONE;
-                justCreated = Pattern::NONE;
-
-                return;
-            }
-
-            justCreated = Pattern::NONE;
 
             // A note outside the selection becomes the only chosen one, one
             // inside it takes the whole selection along
@@ -714,14 +689,11 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
         }
 
         if (!ui.down) {
-            // A note that was pulled longer is heard in its full length. It
-            // was drawn, not clicked, so no double click can take it back.
+            // A note that was pulled longer is heard in its full length
             if (drag == Drag::Create) {
                 if (const Note *written = pattern.Get(dragNote); written != nullptr && written->length > 1) {
                     asked.pitch = written->pitch;
                     asked.steps = written->length;
-
-                    justCreated = Pattern::NONE;
                 }
             }
 

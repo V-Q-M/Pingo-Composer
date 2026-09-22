@@ -82,10 +82,6 @@ public:
     // What the roll asked for in this frame, see Preview
     const Preview &Asked() const;
 
-    // A double click into the roll asks to close it. The note the first click
-    // wrote is taken back, so closing leaves nothing behind.
-    bool ClosingAsked() const;
-
 private:
     // What the left button is doing right now
     enum class Drag {
@@ -227,11 +223,6 @@ private:
     float scrubbed = -1.0f;
 
     Preview asked;
-
-    bool closing = false;
-
-    // The note the last click wrote, so a double click can take it back
-    int justCreated = Pattern::NONE;
 
     // The key the mouse is on and the one it holds down, 0 for none
     int hoveredKey = 0;
