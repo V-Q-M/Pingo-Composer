@@ -6,6 +6,7 @@
 
 #include "Arranger.h"
 #include "Channel.h"
+#include "Clipboard.h"
 #include "Pattern.h"
 #include "PianoRoll.h"
 #include "Synth.h"
@@ -76,8 +77,13 @@ private:
     void Export();
 
     // Writes the whole song into a file of our own, so work can go on later.
-    // The first time it asks where, after that it writes there again.
+    // The first time it asks where, after that it writes there again. That is
+    // what Control and S do.
     void Save();
+
+    // Always asks where the song should go, e.g. to keep a second version of
+    // it. That is what the button in the bar does.
+    void SaveAs();
 
     // Reads a song of our own, or the notes of a midi file
     void Open();
@@ -103,6 +109,10 @@ private:
     PianoRoll roll;
 
     Arranger arranger;
+
+    // What was copied last, shared by the roll and the arrangement: notes out
+    // of a pattern and a whole pattern are the same thing to it
+    NoteClipboard clipboard;
 
     // What the keys and the written notes sound like
     Synth synth;

@@ -19,6 +19,9 @@ constexpr float BLACK_KEY_SHARE = 0.6f;
 // The rows of the black keys are a little darker than the rest
 constexpr Color ROLL_ROW_SHARP{0, 0, 0, 40};
 
+// The row of the note that is being written or moved lights up a little
+constexpr Color ROLL_ROW_LIT{255, 255, 255, 28};
+
 // The line of a bar is brighter than the one of a beat
 constexpr Color ROLL_BEAT{255, 255, 255, 20};
 constexpr Color ROLL_BAR{255, 255, 255, 60};
@@ -106,7 +109,7 @@ float PianoRoll::YOf(const Grid &grid, int pitch) const {
     return grid.area.y + static_cast<float>(topPitch - pitch) * PITCH_HEIGHT;
 }
 
-void PianoRoll::Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour) {
+void PianoRoll::Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour, NoteClipboard &clipboard) {
     Grid grid = LayoutFor(bounds);
 
     scrubbed = -1.0f;
@@ -131,6 +134,7 @@ void PianoRoll::Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour) {
     HandleWheel(ui, grid);
     HandleKeyboard(ui, grid);
     HandleKeys(pattern);
+    HandleClipboard(ui, grid, pattern, clipboard);
     HandleScrollbars(ui, grid);
     HandleMouse(ui, grid, pattern);
     LimitView(grid);
@@ -183,7 +187,7 @@ void PianoRoll::DrawKeys(Ui &ui, const Grid &grid) const {
 
         Color colour = sharp ? ROLL_BLACK_KEY : ROLL_WHITE_KEY;
 
-        if (pitch == heldKey) {
+        if (pitch == heldKey || pitch == litPitch) {
             colour = ui.theme.highlight;
         } else if (pitch == hoveredKey) {
             colour = sharp ? ROLL_BLACK_KEY_HOVER : ROLL_WHITE_KEY_HOVER;
@@ -218,7 +222,9 @@ void PianoRoll::HandleKeyboard(Ui &ui, const Grid &grid) {
         hoveredKey = 0;
     }
 
-    if (inside && ui.clicked && hoveredKey != 0) {
+    // Holding the button and brushing over the keys plays one after another,
+    // so the keyboard can be tried out like a real one
+    if (inside && ui.down && hoveredKey != 0 && hoveredKey != heldKey) {
         heldKey = hoveredKey;
 
         asked.pitch = heldKey;
@@ -301,6 +307,17 @@ void PianoRoll::DrawCells(const Grid &grid) const {
                 ROLL_BEAT
             );
         }
+    }
+
+    // The row of the note under the hand, so it is clear which one is meant
+    if (litPitch != 0) {
+        DrawRectangle(
+            static_cast<int>(grid.area.x),
+            static_cast<int>(YOf(grid, litPitch)),
+            static_cast<int>(grid.area.width),
+            static_cast<int>(PITCH_HEIGHT),
+            ROLL_ROW_LIT
+        );
     }
 
     int first = static_cast<int>(scroll);
@@ -434,6 +451,60 @@ void PianoRoll::HandleKeys(Pattern &pattern) {
 
     RememberChosen(pattern);
     ApplyToChosen(pattern, steps, pitches, length, 0);
+
+    if (length != 0) {
+        RememberLength(pattern, chosen.front());
+    }
+}
+
+// A note that was made longer or shorter says how long the next one starts
+void PianoRoll::RememberLength(const Pattern &pattern, int id) {
+    if (const Note *note = pattern.Get(id)) {
+        lastLength = note->length;
+    }
+}
+
+// Control and C take the chosen notes, Control and V write them again. They
+// land under the mouse, or where the song stands while it is somewhere else.
+void PianoRoll::HandleClipboard(Ui &ui, const Grid &grid, Pattern &pattern, NoteClipboard &clipboard) {
+    if (!ui.control) {
+        return;
+    }
+
+    if (IsKeyPressed(KEY_C) && !chosen.empty()) {
+        std::vector<Note> copied;
+
+        for (const Note &note: pattern.Notes()) {
+            if (IsChosen(note.id)) {
+                copied.push_back(note);
+            }
+        }
+
+        clipboard.Put(std::move(copied));
+    }
+
+    if (!IsKeyPressed(KEY_V) || clipboard.Empty()) {
+        return;
+    }
+
+    bool inside = Widgets::Hovered(ui, grid.area);
+
+    // The corner of what was copied goes where the mouse is
+    int step = inside
+                   ? std::max(StepAt(grid, ui.mouse.x), 0)
+                   : static_cast<int>(playhead * static_cast<float>(Pattern::STEPS_PER_BEAT));
+    int pitch = inside ? PitchAt(grid, ui.mouse.y) : clipboard.HighestPitch();
+
+    ChooseNone();
+
+    for (const Note &note: clipboard.Notes()) {
+        Note pasted = note;
+
+        pasted.step = note.step - clipboard.FirstStep() + step;
+        pasted.pitch = note.pitch - clipboard.HighestPitch() + pitch;
+
+        Choose(pattern.Add(pasted));
+    }
 }
 
 bool PianoRoll::IsChosen(int id) const {
@@ -573,10 +644,10 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
     int step = std::max(StepAt(grid, ui.mouse.x), 0);
     int pitch = PitchAt(grid, ui.mouse.y);
 
-    // Delete takes away every chosen note. Backspace alone belongs to the
-    // transport and rewinds, so it only deletes with Shift.
+    // Delete and Backspace take away every chosen note. Backspace with Shift
+    // belongs to the transport and rewinds, see StudioView.
     bool erase = IsKeyPressed(KEY_DELETE) ||
-                 (IsKeyPressed(KEY_BACKSPACE) && ui.shift);
+                 (IsKeyPressed(KEY_BACKSPACE) && !ui.shift);
 
     if (erase && !chosen.empty()) {
         for (int id: chosen) {
@@ -602,22 +673,34 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
     if (drag == Drag::None && inside && ui.clicked) {
         int under = pattern.At(step, pitch);
 
-        if (ui.shift) {
+        if (ui.control) {
+            // Control picks single notes, one after another, and lets go of
+            // one that was already chosen
+            if (under != Pattern::NONE) {
+                if (IsChosen(under)) {
+                    chosen.erase(std::remove(chosen.begin(), chosen.end(), under), chosen.end());
+                } else {
+                    Choose(under);
+                }
+            }
+        } else if (ui.shift) {
             // Shift pulls a window over the notes it should choose
             drag = Drag::Select;
             selectionStart = ui.mouse;
 
             ChooseNone();
         } else if (under == Pattern::NONE) {
-            // A new note, one step long. Keeping the button held and moving
-            // right makes it longer right away.
+            // A new note, as long as the one written last. Keeping the button
+            // held and moving right makes it longer right away.
             Note note;
             note.step = step;
             note.pitch = pitch;
+            note.length = lastLength;
 
             dragNote = pattern.Add(note);
             dragStart = *pattern.Get(dragNote);
             drag = Drag::Create;
+            createMoved = false;
 
             ChooseNone();
             Choose(dragNote);
@@ -680,12 +763,25 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
     }
 
     if (drag == Drag::Create || drag == Drag::Resize || drag == Drag::ResizeStart || drag == Drag::Move) {
-        if (drag == Drag::Create || drag == Drag::Resize) {
+        // A new note keeps the length of the one written last. Only once the
+        // mouse leaves the step it started in does the drag say how long it is.
+        if (drag == Drag::Create) {
+            createMoved = createMoved || step != dragStart.step;
+
+            int wanted = createMoved ? std::max(step - dragStart.step + 1, 1) : lastLength;
+
+            ApplyToChosen(pattern, 0, 0, wanted - dragStart.length, 0);
+        } else if (drag == Drag::Resize) {
             ApplyToChosen(pattern, 0, 0, step - dragStart.End() + 1, 0);
         } else if (drag == Drag::ResizeStart) {
             ApplyToChosen(pattern, 0, 0, 0, step - dragStart.step);
         } else {
             ApplyToChosen(pattern, step - grabStep, pitch - grabPitch, 0, 0);
+        }
+
+        // The key and the row of the note that is in the hand light up
+        if (const Note *held = pattern.Get(dragNote)) {
+            litPitch = held->pitch;
         }
 
         if (!ui.down) {
@@ -697,8 +793,14 @@ void PianoRoll::HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern) {
                 }
             }
 
+            // However long it ended up, the next note starts that long
+            if (drag != Drag::Move) {
+                RememberLength(pattern, dragNote);
+            }
+
             drag = Drag::None;
             dragNote = Pattern::NONE;
+            litPitch = 0;
         }
     }
 }

@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 
+#include "Clipboard.h"
 #include "Pattern.h"
 #include "Engine/Widgets.h"
 
@@ -15,6 +16,7 @@
 //   left button    on a note moves it, on one of its edges it changes its
 //                  length: the left edge keeps the end, the right one the start
 //   Shift + left   pulls a window over several notes and chooses them
+//   Control + left picks single notes, one after another
 //   right button   erases every note it is dragged over
 //   wheel          scrolls through the pitches, with Shift through the time,
 //                  with Control it zooms the time
@@ -26,8 +28,13 @@
 //   left, right          one step shorter or longer
 //   Shift left, right    moves it one step through the time
 //   up, down             one half step higher or lower, with Shift an octave
-//   Delete, Shift back   removes it. Backspace alone rewinds the song, see
-//                        StudioView
+//   Delete, Backspace    removes it. Shift and Backspace rewind the song
+//                        instead, see StudioView
+//   Control C, V         copies the chosen notes and writes them again under
+//                        the mouse
+//
+// A new note is as long as the last one that was written or changed, so a row
+// of eighths stays a row of eighths without setting anything.
 //
 // The roll keeps where it looks (scrolling and zoom), the notes belong to the
 // pattern. One roll can therefore show one channel after another.
@@ -56,7 +63,7 @@ public:
 
     // Draws the roll into the bounds and lets the mouse edit the pattern.
     // colour is the colour of the channel the pattern belongs to.
-    void Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour);
+    void Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour, NoteClipboard &clipboard);
 
     // Where the song stands, in beats. The roll draws the line and scrolls
     // along while it is playing.
@@ -141,12 +148,19 @@ private:
 
     void HandleMouse(Ui &ui, const Grid &grid, Pattern &pattern);
 
+    // Copies the chosen notes and writes them again, see the comment above
+    void HandleClipboard(Ui &ui, const Grid &grid, Pattern &pattern, NoteClipboard &clipboard);
+
     // Everything about the chosen notes
     bool IsChosen(int id) const;
 
     void Choose(int id);
 
     void ChooseNone();
+
+    // Takes the length a new note starts with from this one, e.g. after it
+    // was dragged longer
+    void RememberLength(const Pattern &pattern, int id);
 
     // Remembers how the chosen notes sit right now, so a drag can move all of
     // them by the same amount
@@ -191,6 +205,17 @@ private:
     int topPitch = 84;
 
     float stepWidth = 8.0f;
+
+    // How long the note written last was: the next one starts that long
+    int lastLength = 1;
+
+    // Did the mouse leave the step a new note started in? Only then does the
+    // drag decide how long it becomes.
+    bool createMoved = false;
+
+    // The row and the key that light up while a note is written or moved, so
+    // it is clear which note is under the mouse. 0 for none.
+    int litPitch = 0;
 
     Drag drag = Drag::None;
     int dragNote = Pattern::NONE;

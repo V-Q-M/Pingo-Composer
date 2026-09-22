@@ -29,6 +29,14 @@ static Color Shade(Color colour, float factor) {
     };
 }
 
+bool Arranger::Block::operator==(const Block &other) const {
+    return row == other.row && bar == other.bar;
+}
+
+bool Arranger::IsChosen(Block block) const {
+    return std::find(chosen.begin(), chosen.end(), block) != chosen.end();
+}
+
 void Arranger::SetPlayhead(float beats) {
     playhead = beats;
 }
@@ -76,7 +84,7 @@ float Arranger::YOf(const Grid &grid, int row) const {
     return grid.area.y + static_cast<float>(row) * ROW_HEIGHT;
 }
 
-void Arranger::Draw(Ui &ui, Rectangle bounds, std::vector<Channel> &channels) {
+void Arranger::Draw(Ui &ui, Rectangle bounds, std::vector<Channel> &channels, NoteClipboard &clipboard) {
     Grid grid = LayoutFor(bounds);
 
     openedChannel = NOTHING;
@@ -85,6 +93,7 @@ void Arranger::Draw(Ui &ui, Rectangle bounds, std::vector<Channel> &channels) {
 
     lastPattern.resize(channels.size(), 0);
 
+    HandleClipboard(ui, grid, channels, clipboard);
     HandleMouse(ui, grid, channels);
 
     BeginScissorMode(
@@ -220,7 +229,8 @@ void Arranger::DrawBlocks(Ui &ui, const Grid &grid, const std::vector<Channel> &
             Color colour = channel.muted ? Shade(channel.colour, MUTED_SHADE) : channel.colour;
 
             DrawRectangleRec(block, colour);
-            DrawRectangleLinesEx(block, 1.0f, BLOCK_BORDER);
+            DrawRectangleLinesEx(block, 1.0f,
+                                 IsChosen({static_cast<int>(i), bar}) ? ui.theme.highlight : BLOCK_BORDER);
 
             // An empty pattern is only an outline, so it can be told apart
             if (channel.patterns[static_cast<std::size_t>(pattern)].Notes().empty()) {
@@ -251,6 +261,66 @@ void Arranger::DrawBlocks(Ui &ui, const Grid &grid, const std::vector<Channel> &
         static_cast<int>(grid.area.height),
         ui.theme.highlight
     );
+}
+
+// Delete takes the picked blocks out of the song, Control C and V copy the
+// notes of a pattern into another bar. What is copied is a copy of its own, so
+// writing in it later does not change the pattern it came from.
+void Arranger::HandleClipboard(Ui &ui, const Grid &grid, std::vector<Channel> &channels, NoteClipboard &clipboard) {
+    if (IsKeyPressed(KEY_DELETE) || (IsKeyPressed(KEY_BACKSPACE) && !ui.shift)) {
+        for (const Block &block: chosen) {
+            if (block.row < static_cast<int>(channels.size())) {
+                channels[static_cast<std::size_t>(block.row)].Set(block.bar, Channel::EMPTY);
+            }
+        }
+
+        chosen.clear();
+    }
+
+    if (!ui.control) {
+        return;
+    }
+
+    bool inside = Widgets::Hovered(ui, grid.area);
+
+    int bar = BarAt(grid, ui.mouse.x);
+    int row = RowAt(grid, ui.mouse.y);
+
+    bool known = inside && bar >= 0 && bar < Channel::BARS && row >= 0 && row < static_cast<int>(channels.size());
+
+    // The block under the mouse is copied, or the one that was picked first
+    if (IsKeyPressed(KEY_C)) {
+        Block block{row, bar};
+
+        if (!known && !chosen.empty()) {
+            block = chosen.front();
+        } else if (!known) {
+            return;
+        }
+
+        const Pattern *pattern = channels[static_cast<std::size_t>(block.row)].At(block.bar);
+
+        if (pattern != nullptr) {
+            clipboard.Put(pattern->Notes());
+        }
+    }
+
+    // Writing it again makes a pattern of its own in that channel
+    if (IsKeyPressed(KEY_V) && known && !clipboard.Empty()) {
+        Channel &channel = channels[static_cast<std::size_t>(row)];
+
+        int index = channel.Reserve(static_cast<int>(channel.patterns.size()));
+
+        Pattern &pattern = channel.patterns[static_cast<std::size_t>(index)];
+
+        pattern.Clear();
+
+        for (const Note &note: clipboard.Notes()) {
+            pattern.Add(note);
+        }
+
+        channel.Set(bar, index);
+    }
 }
 
 void Arranger::HandleMouse(Ui &ui, const Grid &grid, std::vector<Channel> &channels) {
@@ -292,6 +362,20 @@ void Arranger::HandleMouse(Ui &ui, const Grid &grid, std::vector<Channel> &chann
         return;
     }
 
+    // Control picks single blocks, so several of them can be taken away or
+    // copied at once
+    if (ui.clicked && ui.control) {
+        Block block{row, bar};
+
+        if (IsChosen(block)) {
+            chosen.erase(std::remove(chosen.begin(), chosen.end(), block), chosen.end());
+        } else if (here >= 0) {
+            chosen.push_back(block);
+        }
+
+        return;
+    }
+
     // A double click opens the pattern of this bar in the roll
     if (ui.doubleClicked && here >= 0) {
         openedChannel = row;
@@ -301,7 +385,7 @@ void Arranger::HandleMouse(Ui &ui, const Grid &grid, std::vector<Channel> &chann
     }
 
     // Dragging paints blocks, the right button takes them away again
-    if (ui.down) {
+    if (ui.down && !ui.control) {
         channel.Set(bar, channel.Reserve(wanted));
     } else if (ui.rightDown) {
         channel.Set(bar, Channel::EMPTY);

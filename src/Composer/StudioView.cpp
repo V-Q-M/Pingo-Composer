@@ -48,13 +48,11 @@ static std::string NameOf(const std::string &path) {
 }
 
 // Writes the whole song, so work can go on later. Only the first time asks
-// where it should go.
+// where it should go, after that it goes there again.
 void StudioView::Save() {
     if (songFile.empty()) {
-        songFile = AskWhereToSave(std::string("song.") + SongFile::EXTENSION, {SongFile::EXTENSION});
-    }
+        SaveAs();
 
-    if (songFile.empty()) {
         return;
     }
 
@@ -65,6 +63,22 @@ void StudioView::Save() {
     if (!written) {
         songFile.clear();
     }
+}
+
+// Always asks where: a song can be put down under a second name this way, and
+// a song without a file gets one
+void StudioView::SaveAs() {
+    std::string suggested = songFile.empty() ? std::string("song.") + SongFile::EXTENSION : NameOf(songFile);
+
+    std::string file = AskWhereToSave(suggested, {SongFile::EXTENSION});
+
+    if (file.empty()) {
+        return;
+    }
+
+    songFile = file;
+
+    Save();
 }
 
 // Reads a song of our own, or the notes of a midi file
@@ -245,10 +259,10 @@ void StudioView::Update(float dt) {
         Open();
     }
 
-    // Backspace rewinds. With Shift it belongs to the roll and deletes a note.
+    // Backspace alone belongs to the roll and deletes, with Shift it rewinds
     bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
 
-    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) || (IsKeyPressed(KEY_BACKSPACE) && !shift)) {
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) || (IsKeyPressed(KEY_BACKSPACE) && shift)) {
         position = 0.0f;
 
         RestartPlayback();
@@ -305,7 +319,7 @@ void StudioView::DrawArrangement(Ui &ui, Rectangle bounds) {
     Rectangle area{bounds.x + 1.0f, bounds.y + row, bounds.width - 2.0f, bounds.height - row - 1.0f};
 
     arranger.SetPlayhead(position);
-    arranger.Draw(ui, area, channels);
+    arranger.Draw(ui, area, channels, clipboard);
 
     // A double click on a block opens its pattern in the roll
     if (arranger.OpenedChannel() != Arranger::NOTHING) {
@@ -329,6 +343,31 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
     float row = Widgets::RowHeight(font);
     float y = bounds.y + (bounds.height - row) / 2.0f;
     float x = GAP;
+
+    // Everything about files stands together at the left end: opening,
+    // exporting and saving
+    float openWidth = Widgets::RowWidth(font, "OPEN");
+    float exportWidth = Widgets::RowWidth(font, "EXPORT");
+
+    if (Widgets::Button(ui, {x, y, openWidth, row}, "OPEN")) {
+        Open();
+    }
+
+    x += openWidth + 2.0f;
+
+    if (Widgets::Button(ui, {x, y, exportWidth, row}, "EXPORT")) {
+        Export();
+    }
+
+    x += exportWidth + 2.0f;
+
+    // The floppy asks every time where the song should go, Control and S
+    // writes it straight away
+    if (Widgets::Button(ui, {x, y, row, row}, std::string(1, FontRenderer::ICON_SAVE))) {
+        SaveAs();
+    }
+
+    x += row + GAP * 2.0f;
 
     std::string play(1, playing ? FontRenderer::ICON_PAUSE : FontRenderer::ICON_PLAY);
 
@@ -366,34 +405,13 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
         tempo = std::min(tempo + TEMPO_STEP, TEMPO_MAX);
     }
 
-    // Opening, saving and exporting sit at the right end of the row
-    float exportWidth = Widgets::RowWidth(font, "WAV");
-    float saveWidth = row;
-    float openWidth = Widgets::RowWidth(font, "OPEN");
-
-    float exportX = bounds.width - exportWidth - GAP;
-    float saveX = exportX - saveWidth - 2.0f;
-    float openX = saveX - openWidth - 2.0f;
-
-    if (Widgets::Button(ui, {openX, y, openWidth, row}, "OPEN")) {
-        Open();
-    }
-
-    if (Widgets::Button(ui, {saveX, y, saveWidth, row}, std::string(1, FontRenderer::ICON_SAVE))) {
-        Save();
-    }
-
-    if (Widgets::Button(ui, {exportX, y, exportWidth, row}, "WAV")) {
-        Export();
-    }
-
-    // The name of the song on the left of them, cyan like the titles of the
+    // The name of the song at the right end, cyan like the titles of the
     // engine
     std::string title = songFile.empty() ? "UNTITLED SONG" : NameOf(songFile);
 
     Widgets::Label(
         ui,
-        {openX - Widgets::RowWidth(font, title), y + Widgets::PADDING},
+        {bounds.width - Widgets::RowWidth(font, title) - GAP, y + Widgets::PADDING},
         title,
         ui.theme.titleVariant
     );
@@ -492,7 +510,7 @@ void StudioView::DrawPattern(Ui &ui, Rectangle bounds) {
     };
 
     roll.SetPlayhead(position, playing);
-    roll.Draw(ui, area, pattern, channel.colour);
+    roll.Draw(ui, area, pattern, channel.colour, clipboard);
 
     PlayPreview(roll.Asked());
 
@@ -523,8 +541,8 @@ void StudioView::DrawStatus(Ui &ui, Rectangle bounds) {
     );
 
     std::string keys = rollOpen
-                           ? "DRAG DRAW   ARROWS EDIT   CTRL E EXPORTS THE PATTERN"
-                           : "DRAG BLOCKS   WHEEL PATTERN   CTRL O OPEN   CTRL S SAVE";
+                           ? "DRAG DRAW   CTRL PICK   CTRL C V COPY   BACKSPACE DELETE"
+                           : "DRAG BLOCKS   WHEEL PATTERN   CTRL C V COPY   CTRL S SAVE";
 
     Widgets::Label(
         ui,

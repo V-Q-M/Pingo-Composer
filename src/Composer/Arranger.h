@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "Channel.h"
+#include "Clipboard.h"
 #include "Engine/Widgets.h"
 
 // The arrangement of the song: one row per channel, one column per bar.
@@ -13,6 +14,10 @@
 //   right button   takes blocks away again
 //   wheel          over a block changes which pattern it plays, past the last
 //                  one a new empty pattern is made
+//   Control + left picks single blocks, one after another
+//   Delete         takes the picked blocks out of the song
+//   Control C, V   copies the notes of a block and writes them into the bar
+//                  under the mouse, as a pattern of its own
 //   double click   opens the pattern of the block in the piano roll
 //
 // The arranger only edits the channels it is given, it owns nothing itself
@@ -31,7 +36,7 @@ public:
     // Nothing was asked for
     static constexpr int NOTHING = -1;
 
-    void Draw(Ui &ui, Rectangle bounds, std::vector<Channel> &channels);
+    void Draw(Ui &ui, Rectangle bounds, std::vector<Channel> &channels, NoteClipboard &clipboard);
 
     // Where the song stands, in beats
     void SetPlayhead(float beats);
@@ -46,6 +51,14 @@ public:
     float ScrubbedBeats() const;
 
 private:
+    // One cell of the grid: the channel and the bar it sits in
+    struct Block {
+        int row = 0;
+        int bar = 0;
+
+        bool operator==(const Block &other) const;
+    };
+
     struct Grid {
         Rectangle area;
         Rectangle names;
@@ -70,11 +83,19 @@ private:
 
     void HandleMouse(Ui &ui, const Grid &grid, std::vector<Channel> &channels);
 
+    // Copies a whole pattern and writes it again, see the comment above
+    void HandleClipboard(Ui &ui, const Grid &grid, std::vector<Channel> &channels, NoteClipboard &clipboard);
+
+    bool IsChosen(Block block) const;
+
     // The first bar on the left
     float scroll = 0.0f;
 
     // The pattern a new block starts with, per channel
     std::vector<int> lastPattern;
+
+    // The blocks that were picked with Control, usually none
+    std::vector<Block> chosen;
 
     float playhead = 0.0f;
 
