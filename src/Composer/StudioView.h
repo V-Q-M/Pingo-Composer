@@ -71,6 +71,13 @@ private:
     // The pattern the roll works on, made if it does not exist yet
     Pattern &CurrentPattern();
 
+    // Writes the song, or the open pattern, into a file the user picks. The
+    // ending of the name decides whether it becomes sound or notes.
+    void Export();
+
+    // What the last export did, shown in the status line
+    std::string report;
+
     std::vector<Channel> channels;
 
     // The channel and the pattern the roll works on

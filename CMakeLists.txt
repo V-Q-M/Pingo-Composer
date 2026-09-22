@@ -16,6 +16,22 @@ file(GLOB_RECURSE COMPOSER_SOURCES CONFIGURE_DEPENDS
 
 add_executable(PingoComposer ${COMPOSER_SOURCES})
 
+# On macOS some parts talk to Cocoa directly, e.g. the save panel of the
+# system. They live in .mm files: Objective-C++ with automatic reference
+# counting.
+if (APPLE)
+    enable_language(OBJCXX)
+
+    file(GLOB_RECURSE COMPOSER_APPLE_SOURCES CONFIGURE_DEPENDS
+            ${PROJECT_SOURCE_DIR}/src/*.mm
+    )
+
+    target_sources(PingoComposer PRIVATE ${COMPOSER_APPLE_SOURCES})
+    set_source_files_properties(${COMPOSER_APPLE_SOURCES} PROPERTIES COMPILE_OPTIONS -fobjc-arc)
+    # AppKit for the panel, UniformTypeIdentifiers for the file endings it offers
+    target_link_libraries(PingoComposer PRIVATE "-framework AppKit" "-framework UniformTypeIdentifiers")
+endif ()
+
 # Includes start at src/, so "Engine/FontRenderer.h" is written the same everywhere
 target_include_directories(PingoComposer PRIVATE ${PROJECT_SOURCE_DIR}/src)
 

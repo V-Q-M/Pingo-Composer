@@ -2,7 +2,9 @@
 
 #include <cmath>
 
+#include "SongExport.h"
 #include "Engine/App.h"
+#include "Engine/SaveDialog.h"
 
 // Heights of the bars and the width of the channel list, in canvas pixels
 constexpr float TRANSPORT_HEIGHT = 16.0f;
@@ -34,6 +36,33 @@ StudioView::StudioView(App &app)
     add("TRIANGLE", Color{255, 229, 26, 255}, Synth::Wave::Triangle);
     add("NOISE", Color{188, 190, 202, 255}, Synth::Wave::Noise);
     add("SAMPLE", Color{255, 108, 34, 255}, Synth::Wave::Square);
+}
+
+// The whole song, or only the pattern that is open: whatever is on the screen
+// is what gets written
+void StudioView::Export() {
+    bool onlyPattern = rollOpen;
+
+    std::string suggested = onlyPattern
+                                ? channels[current].name + " " + std::to_string(currentPattern + 1) + ".wav"
+                                : "song.wav";
+
+    std::string file = AskWhereToSave(suggested, {"wav", "mid"});
+
+    if (file.empty()) {
+        return;
+    }
+
+    std::vector<SongExport::Event> events = onlyPattern
+                                                ? SongExport::OnePattern(CurrentPattern())
+                                                : SongExport::Song(channels);
+
+    // One pattern belongs to its own channel, so its sound and its name fit
+    std::vector<Channel> used = onlyPattern ? std::vector<Channel>{channels[current]} : channels;
+
+    bool written = SongExport::Write(file, events, used, tempo);
+
+    report = written ? "SAVED " + std::to_string(events.size()) + " NOTES" : "NOTHING TO SAVE";
 }
 
 Pattern &StudioView::CurrentPattern() {
@@ -134,6 +163,14 @@ void StudioView::Update(float dt) {
 
         // Starting listens from here on, stopping lets nothing ring on
         RestartPlayback();
+    }
+
+    // Control and S save, like everywhere else
+    bool control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ||
+                   IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);
+
+    if (control && IsKeyPressed(KEY_S)) {
+        Export();
     }
 
     // Backspace rewinds. With Shift it belongs to the roll and deletes a note.
@@ -257,12 +294,20 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
         tempo = std::min(tempo + TEMPO_STEP, TEMPO_MAX);
     }
 
+    // Saving sits at the right end of the row, next to the name
+    float saveWidth = row;
+    float saveX = bounds.width - saveWidth - GAP;
+
+    if (Widgets::Button(ui, {saveX, y, saveWidth, row}, std::string(1, FontRenderer::ICON_SAVE))) {
+        Export();
+    }
+
     // The name of the song on the right, cyan like the titles of the engine
     std::string title = "UNTITLED SONG";
 
     Widgets::Label(
         ui,
-        {bounds.width - Widgets::RowWidth(font, title), y + Widgets::PADDING},
+        {saveX - Widgets::RowWidth(font, title), y + Widgets::PADDING},
         title,
         ui.theme.titleVariant
     );
@@ -381,16 +426,19 @@ void StudioView::DrawStatus(Ui &ui, Rectangle bounds) {
     std::string bar = std::to_string(static_cast<int>(position) / Pattern::BEATS_PER_BAR + 1);
     std::string beat = std::to_string(static_cast<int>(position) % Pattern::BEATS_PER_BAR + 1);
 
+    // After saving its answer stands here instead of the place in the song
+    std::string left = report.empty() ? state + "  BAR " + bar + "." + beat : report;
+
     Widgets::Label(
         ui,
         {GAP, bounds.y + 2.0f},
-        state + "  BAR " + bar + "." + beat,
-        playing ? ui.theme.titleVariant : ui.theme.mutedVariant
+        left,
+        report.empty() ? (playing ? ui.theme.titleVariant : ui.theme.mutedVariant) : ui.theme.titleVariant
     );
 
     std::string keys = rollOpen
-                           ? "DRAG DRAW   RIGHT ERASE   ARROWS EDIT   DOUBLE CLICK CHANNEL CLOSES"
-                           : "DRAG BLOCKS   RIGHT ERASE   WHEEL PATTERN   DOUBLE CLICK OPENS";
+                           ? "DRAG DRAW   ARROWS EDIT   CTRL S SAVES THE PATTERN"
+                           : "DRAG BLOCKS   WHEEL PATTERN   CTRL S SAVES THE SONG";
 
     Widgets::Label(
         ui,
