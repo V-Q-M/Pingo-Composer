@@ -18,15 +18,15 @@
 //   Shift + left   pulls a window over several notes and chooses them
 //   Control + left picks single notes, one after another
 //   right button   erases every note it is dragged over
-//   wheel          scrolls through the pitches, with Shift through the time,
-//                  with Control it zooms the time
+//   wheel          scrolls through the pitches, sideways or with Shift
+//                  through the time, with Control it zooms the time
 //   scrollbars     at the right and at the bottom, like in the engine
 //   piano keys     light up under the mouse, holding one asks for its sound
 //
 // Whatever was touched or caught by the window last is chosen. Moving, the
 // length and the keys work on every chosen note at once:
-//   left, right          one step shorter or longer
-//   Shift left, right    moves it one step through the time
+//   left, right          moves it one step through the time
+//   Shift left, right    one step shorter or longer
 //   up, down             one half step higher or lower, with Shift an octave
 //   Delete, Backspace    removes it. Shift and Backspace rewind the song
 //                        instead, see StudioView

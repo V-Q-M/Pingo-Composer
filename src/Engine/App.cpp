@@ -38,7 +38,14 @@ void App::RunFrame() {
     ui.released = IsMouseButtonReleased(MOUSE_BUTTON_LEFT);
     ui.rightClicked = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
     ui.rightDown = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
-    ui.wheel = GetMouseWheelMove();
+
+    // Both ways at once: the wheel of a mouse only fills the one, a trackpad
+    // fills both
+    Vector2 wheel = GetMouseWheelMoveV();
+
+    ui.wheel = wheel.y;
+    ui.wheelSideways = wheel.x;
+
     ui.shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
     ui.control = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ||
                  IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER);

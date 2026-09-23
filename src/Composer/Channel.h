@@ -47,4 +47,13 @@ struct Channel {
 
     // Makes sure the pattern exists and gives back its index
     int Reserve(int pattern);
+
+    // How many bars the notes of a pattern fill, at least one. A pattern that
+    // was written over four bars therefore takes four bars in the song.
+    int BarsOf(int pattern) const;
+
+    // The bar the block that sounds in this bar starts in, EMPTY for a bar no
+    // block reaches into. A block that is several bars long covers the bars
+    // behind its own, they belong to it.
+    int StartOf(int bar) const;
 };

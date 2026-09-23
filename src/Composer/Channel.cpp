@@ -37,3 +37,31 @@ int Channel::Reserve(int pattern) {
 
     return wanted;
 }
+
+int Channel::BarsOf(int pattern) const {
+    if (pattern < 0 || pattern >= static_cast<int>(patterns.size())) {
+        return 0;
+    }
+
+    const int stepsPerBar = Pattern::STEPS_PER_BEAT * Pattern::BEATS_PER_BAR;
+
+    return std::max((patterns[static_cast<std::size_t>(pattern)].Length() + stepsPerBar - 1) / stepsPerBar, 1);
+}
+
+int Channel::StartOf(int bar) const {
+    if (bar < 0 || bar >= static_cast<int>(bars.size())) {
+        return EMPTY;
+    }
+
+    // Blocks never lie on top of each other, so the first one found towards
+    // the left that is long enough is the one this bar belongs to
+    for (int start = bar; start >= 0; start--) {
+        int pattern = bars[static_cast<std::size_t>(start)];
+
+        if (pattern >= 0 && start + BarsOf(pattern) > bar) {
+            return start;
+        }
+    }
+
+    return EMPTY;
+}

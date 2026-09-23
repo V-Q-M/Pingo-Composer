@@ -8,8 +8,9 @@
 #include "Engine/App.h"
 #include "Engine/SaveDialog.h"
 
-// Heights of the bars and the width of the channel list, in canvas pixels
-constexpr float TRANSPORT_HEIGHT = 16.0f;
+// Heights of the bars and the width of the channel list, in canvas pixels.
+// The transport holds two rows: the files above, the playing below.
+constexpr float TRANSPORT_HEIGHT = 31.0f;
 constexpr float STATUS_HEIGHT = 11.0f;
 constexpr float CHANNEL_WIDTH = 84.0f;
 
@@ -341,7 +342,11 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
 
     const FontRenderer &font = ui.font;
     float row = Widgets::RowHeight(font);
-    float y = bounds.y + (bounds.height - row) / 2.0f;
+
+    // The files above, playing below: two short rows read faster than one
+    // long one, and the buttons stay big enough to hit
+    float files = bounds.y + 1.0f;
+    float y = files + row + 1.0f;
     float x = GAP;
 
     // Everything about files stands together at the left end: opening,
@@ -349,13 +354,13 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
     float openWidth = Widgets::RowWidth(font, "OPEN");
     float exportWidth = Widgets::RowWidth(font, "EXPORT");
 
-    if (Widgets::Button(ui, {x, y, openWidth, row}, "OPEN")) {
+    if (Widgets::Button(ui, {x, files, openWidth, row}, "OPEN")) {
         Open();
     }
 
     x += openWidth + 2.0f;
 
-    if (Widgets::Button(ui, {x, y, exportWidth, row}, "EXPORT")) {
+    if (Widgets::Button(ui, {x, files, exportWidth, row}, "EXPORT")) {
         Export();
     }
 
@@ -363,11 +368,12 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
 
     // The floppy asks every time where the song should go, Control and S
     // writes it straight away
-    if (Widgets::Button(ui, {x, y, row, row}, std::string(1, FontRenderer::ICON_SAVE))) {
+    if (Widgets::Button(ui, {x, files, row, row}, std::string(1, FontRenderer::ICON_SAVE))) {
         SaveAs();
     }
 
-    x += row + GAP * 2.0f;
+    // The second row starts at the left again
+    x = GAP;
 
     std::string play(1, playing ? FontRenderer::ICON_PAUSE : FontRenderer::ICON_PLAY);
 
@@ -405,13 +411,13 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
         tempo = std::min(tempo + TEMPO_STEP, TEMPO_MAX);
     }
 
-    // The name of the song at the right end, cyan like the titles of the
-    // engine
+    // The name of the song at the right end of the upper row, cyan like the
+    // titles of the engine
     std::string title = songFile.empty() ? "UNTITLED SONG" : NameOf(songFile);
 
     Widgets::Label(
         ui,
-        {bounds.width - Widgets::RowWidth(font, title) - GAP, y + Widgets::PADDING},
+        {bounds.width - Widgets::RowWidth(font, title) - GAP, files + Widgets::PADDING},
         title,
         ui.theme.titleVariant
     );

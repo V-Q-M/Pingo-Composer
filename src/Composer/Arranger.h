@@ -13,12 +13,19 @@
 //   left button    puts a block into a bar, dragging paints a whole row
 //   right button   takes blocks away again
 //   wheel          over a block changes which pattern it plays, past the last
-//                  one a new empty pattern is made
+//                  one a new empty pattern is made. It takes a good turn per
+//                  step: a song needs a handful of patterns, not fifty.
+//   1 to 9         over a block says its number straight away
+//   sideways       scrolls through the song, as does the wheel next to a block
 //   Control + left picks single blocks, one after another
 //   Delete         takes the picked blocks out of the song
 //   Control C, V   copies the notes of a block and writes them into the bar
 //                  under the mouse, as a pattern of its own
 //   double click   opens the pattern of the block in the piano roll
+//
+// A block is as wide as its pattern is long: a pattern written over four bars
+// takes four bars of the song and covers them, so nothing else starts inside
+// it.
 //
 // The arranger only edits the channels it is given, it owns nothing itself
 // except where it looks.
@@ -35,6 +42,9 @@ public:
 
     // Nothing was asked for
     static constexpr int NOTHING = -1;
+
+    // How far the wheel has to be turned for the next pattern number
+    static constexpr float WHEEL_RESISTANCE = 6.0f;
 
     void Draw(Ui &ui, Rectangle bounds, std::vector<Channel> &channels, NoteClipboard &clipboard);
 
@@ -88,11 +98,20 @@ private:
 
     bool IsChosen(Block block) const;
 
+    // Puts a pattern into a bar, see the comment in the source
+    static void Place(Channel &channel, int bar, int pattern);
+
     // The first bar on the left
     float scroll = 0.0f;
 
     // The pattern a new block starts with, per channel
     std::vector<int> lastPattern;
+
+    // How far the wheel has been turned over the block it stands on, see
+    // WHEEL_RESISTANCE. It starts over on another block.
+    float turned = 0.0f;
+
+    Block turning{NOTHING, NOTHING};
 
     // The blocks that were picked with Control, usually none
     std::vector<Block> chosen;

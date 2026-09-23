@@ -384,7 +384,16 @@ void PianoRoll::DrawPlayhead(Ui &ui, const Grid &grid) const {
 }
 
 void PianoRoll::HandleWheel(Ui &ui, const Grid &grid) {
-    if (ui.wheel == 0.0f || !Widgets::Hovered(ui, grid.area)) {
+    if (!Widgets::Hovered(ui, grid.area)) {
+        return;
+    }
+
+    // A trackpad scrolls sideways on its own, without holding anything
+    if (ui.wheelSideways != 0.0f) {
+        scroll += ui.wheelSideways * SCROLL_STEPS;
+    }
+
+    if (ui.wheel == 0.0f) {
         return;
     }
 
@@ -428,13 +437,13 @@ void PianoRoll::HandleKeys(Pattern &pattern) {
     int pitches = 0;
     int length = 0;
 
-    // With Shift the whole note walks, otherwise only its end
+    // The arrows walk the note, with Shift they change its length
     if (pressed(KEY_RIGHT)) {
-        (shift ? steps : length) += 1;
+        (shift ? length : steps) += 1;
     }
 
     if (pressed(KEY_LEFT)) {
-        (shift ? steps : length) -= 1;
+        (shift ? length : steps) -= 1;
     }
 
     if (pressed(KEY_UP)) {

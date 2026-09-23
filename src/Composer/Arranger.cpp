@@ -212,19 +212,27 @@ void Arranger::DrawBlocks(Ui &ui, const Grid &grid, const std::vector<Channel> &
         );
     }
 
-    // Then the blocks, with the number of their pattern
+    // Then the blocks, with the number of their pattern. A block starting
+    // left of the view still reaches into it, so the first one is looked for
+    // a few bars earlier.
     for (std::size_t i = 0; i < channels.size(); i++) {
         const Channel &channel = channels[i];
 
-        for (int bar = static_cast<int>(scroll); XOf(grid, bar) < grid.area.x + grid.area.width; bar++) {
+        int first = std::max(static_cast<int>(scroll) - Channel::BARS, 0);
+
+        for (int bar = first; XOf(grid, bar) < grid.area.x + grid.area.width; bar++) {
             if (bar >= static_cast<int>(channel.bars.size()) || channel.bars[static_cast<std::size_t>(bar)] < 0) {
                 continue;
             }
 
             int pattern = channel.bars[static_cast<std::size_t>(bar)];
 
+            // As wide as the pattern is long, so four bars of notes look like
+            // four bars
+            float bars = static_cast<float>(channel.BarsOf(pattern)) * BAR_WIDTH;
+
             Rectangle block{XOf(grid, bar) + 1.0f, YOf(grid, static_cast<int>(i)) + 1.0f,
-                            BAR_WIDTH - 2.0f, ROW_HEIGHT - 3.0f};
+                            bars - 2.0f, ROW_HEIGHT - 3.0f};
 
             Color colour = channel.muted ? Shade(channel.colour, MUTED_SHADE) : channel.colour;
 
@@ -330,6 +338,11 @@ void Arranger::HandleMouse(Ui &ui, const Grid &grid, std::vector<Channel> &chann
         return;
     }
 
+    // A trackpad scrolls sideways on its own
+    if (ui.wheelSideways != 0.0f) {
+        scroll = std::clamp(scroll + ui.wheelSideways * 2.0f, 0.0f, static_cast<float>(Channel::BARS) - 1.0f);
+    }
+
     int bar = BarAt(grid, ui.mouse.x);
     int row = RowAt(grid, ui.mouse.y);
 
@@ -341,16 +354,44 @@ void Arranger::HandleMouse(Ui &ui, const Grid &grid, std::vector<Channel> &chann
 
     Channel &channel = channels[static_cast<std::size_t>(row)];
     int &wanted = lastPattern[static_cast<std::size_t>(row)];
-    int here = channel.bars[static_cast<std::size_t>(bar)];
 
-    // The wheel over a block changes which pattern plays there. Past the last
-    // one a new empty pattern is made, so a song grows while writing it.
+    // Bars behind a long block belong to it, so everything works on the bar
+    // the block starts in
+    int start = channel.StartOf(bar);
+    int here = start == Channel::EMPTY ? Channel::EMPTY : channel.bars[static_cast<std::size_t>(start)];
+
+    // A number says which pattern plays here, without any aiming
+    if (here >= 0) {
+        for (int key = KEY_ONE; key <= KEY_NINE; key++) {
+            if (IsKeyPressed(key)) {
+                wanted = key - KEY_ONE;
+
+                Place(channel, start, wanted);
+
+                return;
+            }
+        }
+    }
+
+    // The wheel over a block changes which pattern plays there. It takes a
+    // whole turn per step: a song needs a handful of patterns, and one flick
+    // of a trackpad should not leave fifty empty ones behind.
     if (ui.wheel != 0.0f && here >= 0) {
-        int next = std::max(here + (ui.wheel > 0.0f ? 1 : -1), 0);
+        Block under{row, start};
 
-        channel.Set(bar, channel.Reserve(next));
+        if (!(turning == under)) {
+            turning = under;
+            turned = 0.0f;
+        }
 
-        wanted = next;
+        turned += ui.wheel;
+
+        if (std::abs(turned) >= WHEEL_RESISTANCE) {
+            wanted = std::max(here + (turned > 0.0f ? 1 : -1), 0);
+            turned = 0.0f;
+
+            Place(channel, start, wanted);
+        }
 
         return;
     }
@@ -379,15 +420,29 @@ void Arranger::HandleMouse(Ui &ui, const Grid &grid, std::vector<Channel> &chann
     // A double click opens the pattern of this bar in the roll
     if (ui.doubleClicked && here >= 0) {
         openedChannel = row;
-        openedBar = bar;
+        openedBar = start;
 
         return;
     }
 
-    // Dragging paints blocks, the right button takes them away again
-    if (ui.down && !ui.control) {
-        channel.Set(bar, channel.Reserve(wanted));
-    } else if (ui.rightDown) {
-        channel.Set(bar, Channel::EMPTY);
+    // Dragging paints blocks, the right button takes them away again. A bar
+    // that already belongs to a block is left alone, so painting never cuts
+    // one in half.
+    if (ui.down && !ui.control && here == Channel::EMPTY) {
+        Place(channel, bar, wanted);
+    } else if (ui.rightDown && here >= 0) {
+        channel.Set(start, Channel::EMPTY);
+    }
+}
+
+// Puts a pattern into a bar and keeps the bars it covers free, so no other
+// block starts inside it
+void Arranger::Place(Channel &channel, int bar, int pattern) {
+    int index = channel.Reserve(pattern);
+
+    channel.Set(bar, index);
+
+    for (int covered = bar + 1; covered < bar + channel.BarsOf(index); covered++) {
+        channel.Set(covered, Channel::EMPTY);
     }
 }

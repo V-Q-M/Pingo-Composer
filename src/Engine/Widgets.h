@@ -40,6 +40,10 @@ struct Ui {
     // Mouse wheel of this frame, positive is up
     float wheel = 0.0f;
 
+    // The same sideways, positive is to the right. Trackpads and wheels that
+    // can be tilted send this on their own, without a modifier.
+    float wheelSideways = 0.0f;
+
     // Is a modifier held? Shift and Control change what dragging and the wheel
     // do, e.g. scrolling sideways instead of up.
     bool shift = false;
