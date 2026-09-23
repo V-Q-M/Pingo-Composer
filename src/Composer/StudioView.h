@@ -36,6 +36,9 @@ private:
         Rectangle transport;
         Rectangle channels;
 
+        // The instrument of the channel that is chosen, under the list
+        Rectangle instrument;
+
         // The arrangement, or the piano roll while one is open
         Rectangle middle;
 
@@ -47,6 +50,9 @@ private:
     void DrawTransport(Ui &ui, Rectangle bounds);
 
     void DrawChannels(Ui &ui, Rectangle bounds);
+
+    // How the chosen channel sounds: wave, volume and its envelope
+    void DrawInstrument(Ui &ui, Rectangle bounds);
 
     // The piano roll of the pattern that is open
     void DrawPattern(Ui &ui, Rectangle bounds);

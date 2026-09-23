@@ -67,7 +67,7 @@ int SongExport::Steps(const std::vector<Event> &events) {
 // Plays the events through a Synth without a sound card and keeps what it
 // makes. Step by step, so a note starts exactly where it stands.
 std::vector<short> SongExport::Render(const std::vector<Event> &events,
-                                      const std::vector<Synth::Wave> &waves,
+                                      const std::vector<Synth::Instrument> &instruments,
                                       int tempo) {
     Synth synth;
 
@@ -87,11 +87,13 @@ std::vector<short> SongExport::Render(const std::vector<Event> &events,
                 continue;
             }
 
-            Synth::Wave wave = event.channel < waves.size() ? waves[event.channel] : Synth::Wave::Square;
+            Synth::Instrument instrument = event.channel < instruments.size()
+                                               ? instruments[event.channel]
+                                               : Synth::Instrument{};
 
             synth.Play(
                 event.pitch,
-                wave,
+                instrument,
                 static_cast<float>(event.length) * secondsPerStep,
                 static_cast<float>(event.velocity) / 100.0f
             );
@@ -114,9 +116,9 @@ std::vector<short> SongExport::Render(const std::vector<Event> &events,
 
 bool SongExport::WriteWave(const std::string &file,
                            const std::vector<Event> &events,
-                           const std::vector<Synth::Wave> &waves,
+                           const std::vector<Synth::Instrument> &instruments,
                            int tempo) {
-    std::vector<short> samples = Render(events, waves, tempo);
+    std::vector<short> samples = Render(events, instruments, tempo);
 
     if (samples.empty()) {
         return false;
@@ -283,11 +285,11 @@ bool SongExport::Write(const std::string &file,
         return WriteMidi(file, events, names, tempo);
     }
 
-    std::vector<Synth::Wave> waves;
+    std::vector<Synth::Instrument> instruments;
 
     for (const Channel &channel: channels) {
-        waves.push_back(channel.wave);
+        instruments.push_back(channel.instrument);
     }
 
-    return WriteWave(file, events, waves, tempo);
+    return WriteWave(file, events, instruments, tempo);
 }

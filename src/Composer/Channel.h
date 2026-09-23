@@ -25,8 +25,8 @@ struct Channel {
     // Its notes and its blocks are drawn in this colour
     Color colour{255, 255, 255, 255};
 
-    // How it sounds, see Synth
-    Synth::Wave wave = Synth::Wave::Square;
+    // How it sounds: waveform, volume and how a note comes and goes
+    Synth::Instrument instrument;
 
     // A muted channel stays in the song but is not heard
     bool muted = false;
@@ -51,6 +51,11 @@ struct Channel {
     // How many bars the notes of a pattern fill, at least one. A pattern that
     // was written over four bars therefore takes four bars in the song.
     int BarsOf(int pattern) const;
+
+    // Takes the bars a long block covers away from everything else. A pattern
+    // that grew while it was written swallows the blocks behind it that way,
+    // so what is seen, what is clicked and what is heard stay the same thing.
+    void Tidy();
 
     // The bar the block that sounds in this bar starts in, EMPTY for a bar no
     // block reaches into. A block that is several bars long covers the bars

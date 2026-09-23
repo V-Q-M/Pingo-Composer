@@ -77,3 +77,29 @@ bool Widgets::Toggle(Ui &ui, Rectangle bounds, const std::string &text, bool on)
 
     return hovered && ui.clicked;
 }
+
+int Widgets::Stepper(Ui &ui, Rectangle bounds, const std::string &label, const std::string &value) {
+    float button = bounds.height;
+
+    Rectangle minus{bounds.x + bounds.width - 2.0f * button - 1.0f, bounds.y, button, bounds.height};
+    Rectangle plus{bounds.x + bounds.width - button, bounds.y, button, bounds.height};
+
+    Label(ui, {bounds.x, bounds.y + PADDING}, label, ui.theme.mutedVariant);
+
+    // The value fills whatever is left between the name and the buttons
+    Rectangle middle{bounds.x, bounds.y, minus.x - bounds.x - 1.0f, bounds.height};
+
+    CenteredLabel(ui, middle, value, ui.theme.textVariant);
+
+    int turn = 0;
+
+    if (Button(ui, minus, "-")) {
+        turn = -1;
+    }
+
+    if (Button(ui, plus, "+")) {
+        turn = 1;
+    }
+
+    return turn;
+}

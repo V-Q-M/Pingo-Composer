@@ -86,6 +86,11 @@ public:
     // it reports true, switching it is up to the caller.
     static bool Toggle(Ui &ui, Rectangle bounds, const std::string &text, bool on);
 
+    // A row with a name on the left, its value and a minus and a plus, e.g.
+    // for a setting of an instrument. Gives back -1 or 1 in the frame one of
+    // the two was clicked, 0 otherwise.
+    static int Stepper(Ui &ui, Rectangle bounds, const std::string &label, const std::string &value);
+
     // Is the mouse inside this area? Also remembers it in the Ui, so the
     // program knows whether the mouse is on anything at all.
     static bool Hovered(Ui &ui, Rectangle bounds);

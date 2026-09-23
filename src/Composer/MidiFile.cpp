@@ -258,7 +258,9 @@ bool MidiFile::Load(const std::string &file, std::vector<Channel> &channels, int
 
         channel.name = track.name.empty() ? "TRACK " + std::to_string(number + 1) : track.name;
         channel.colour = IMPORT_COLOURS[index % std::size(IMPORT_COLOURS)];
-        channel.wave = number == DRUM_CHANNEL ? Synth::Wave::Noise : IMPORT_WAVES[index % std::size(IMPORT_WAVES)];
+        channel.instrument.wave = number == DRUM_CHANNEL
+                                      ? Synth::Wave::Noise
+                                      : IMPORT_WAVES[index % std::size(IMPORT_WAVES)];
         channel.patterns.clear();
 
         // One pattern per bar that has notes in it

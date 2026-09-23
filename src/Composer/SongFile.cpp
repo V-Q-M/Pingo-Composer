@@ -45,10 +45,25 @@ bool SongFile::Save(const std::string &file, const std::vector<Channel> &channel
     for (const Channel &channel: channels) {
         json entry;
 
+        const Synth::Instrument &instrument = channel.instrument;
+
         entry["name"] = channel.name;
-        entry["wave"] = Synth::WaveName(channel.wave);
+        entry["wave"] = Synth::WaveName(instrument.wave);
         entry["colour"] = ToHex(channel.colour);
         entry["muted"] = channel.muted;
+
+        // How the channel sounds. The wave stays where it was, so a file of
+        // an older day still opens.
+        entry["instrument"] = json{
+            {"volume", instrument.volume},
+            {"attack", instrument.attack},
+            {"decay", instrument.decay},
+            {"sustain", instrument.sustain},
+            {"release", instrument.release},
+            {"vibrato", instrument.vibrato},
+            {"vibratoHertz", instrument.vibratoHertz},
+            {"sweep", instrument.sweep}
+        };
 
         json patterns = json::array();
 
@@ -118,7 +133,22 @@ bool SongFile::Load(const std::string &file, std::vector<Channel> &channels, int
         Channel channel;
 
         channel.name = entry.value("name", std::string("CHANNEL"));
-        channel.wave = Synth::WaveFromName(entry.value("wave", std::string("square")));
+        Synth::Instrument &instrument = channel.instrument;
+
+        instrument.wave = Synth::WaveFromName(entry.value("wave", std::string("square")));
+
+        // Everything else is what an instrument starts with, so a file that
+        // only knows the wave still sounds right
+        json sound = entry.value("instrument", json::object());
+
+        instrument.volume = sound.value("volume", instrument.volume);
+        instrument.attack = sound.value("attack", instrument.attack);
+        instrument.decay = sound.value("decay", instrument.decay);
+        instrument.sustain = sound.value("sustain", instrument.sustain);
+        instrument.release = sound.value("release", instrument.release);
+        instrument.vibrato = sound.value("vibrato", instrument.vibrato);
+        instrument.vibratoHertz = sound.value("vibratoHertz", instrument.vibratoHertz);
+        instrument.sweep = sound.value("sweep", instrument.sweep);
         channel.colour = FromHex(entry.value("colour", std::string()), Color{255, 255, 255, 255});
         channel.muted = entry.value("muted", false);
 

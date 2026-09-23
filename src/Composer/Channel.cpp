@@ -65,3 +65,19 @@ int Channel::StartOf(int bar) const {
 
     return EMPTY;
 }
+
+void Channel::Tidy() {
+    for (int bar = 0; bar < static_cast<int>(bars.size()); bar++) {
+        int pattern = bars[static_cast<std::size_t>(bar)];
+
+        if (pattern < 0) {
+            continue;
+        }
+
+        int end = std::min(bar + BarsOf(pattern), static_cast<int>(bars.size()));
+
+        for (int covered = bar + 1; covered < end; covered++) {
+            bars[static_cast<std::size_t>(covered)] = EMPTY;
+        }
+    }
+}

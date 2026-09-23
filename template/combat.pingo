@@ -3,7 +3,7 @@
     "channels": [
         {
             "name": "PULSE 1",
-            "wave": "square",
+            "wave": "pulse",
             "colour": "#00f9ff",
             "muted": false,
             "patterns": [
@@ -859,11 +859,21 @@
                     "bar": 32,
                     "pattern": 7
                 }
-            ]
+            ],
+            "instrument": {
+                "volume": 0.35,
+                "attack": 0.002,
+                "decay": 0.0,
+                "sustain": 1.0,
+                "release": 0.12,
+                "vibrato": 0.0,
+                "vibratoHertz": 7.0,
+                "sweep": 0.0
+            }
         },
         {
             "name": "PULSE 2",
-            "wave": "pulse",
+            "wave": "triangle",
             "colour": "#3dff14",
             "muted": false,
             "patterns": [
@@ -1397,7 +1407,17 @@
                     "bar": 32,
                     "pattern": 8
                 }
-            ]
+            ],
+            "instrument": {
+                "volume": 0.7,
+                "attack": 0.002,
+                "decay": 0.0,
+                "sustain": 1.0,
+                "release": 0.01,
+                "vibrato": 0.08,
+                "vibratoHertz": 4.0,
+                "sweep": 0.0
+            }
         },
         {
             "name": "TRIANGLE",
@@ -2697,27 +2717,77 @@
                     "bar": 32,
                     "pattern": 8
                 }
-            ]
+            ],
+            "instrument": {
+                "volume": 0.9,
+                "attack": 0.002,
+                "decay": 0.0,
+                "sustain": 1.0,
+                "release": 0.01,
+                "vibrato": 0.0,
+                "vibratoHertz": 4.0,
+                "sweep": 0.0
+            }
         },
         {
             "name": "NOISE",
-            "wave": "noise",
+            "wave": "saw",
             "colour": "#bcbeca",
             "muted": false,
             "patterns": [
                 {
                     "notes": [
                         {
-                            "step": 0,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
+                            "step": 36,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
                         },
                         {
-                            "step": 35,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
+                            "step": 44,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 52,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 60,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        }
+                    ]
+                },
+                {
+                    "notes": [
+                        {
+                            "step": 4,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 12,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 20,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 28,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
                         },
                         {
                             "step": 36,
@@ -2726,10 +2796,56 @@
                             "velocity": 100
                         },
                         {
-                            "step": 43,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
+                            "step": 44,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 52,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 60,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        }
+                    ]
+                },
+                {
+                    "notes": [
+                        {
+                            "step": 4,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 12,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 20,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 28,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
+                        },
+                        {
+                            "step": 36,
+                            "length": 2,
+                            "pitch": 55,
+                            "velocity": 100
                         },
                         {
                             "step": 44,
@@ -2750,12 +2866,6 @@
                             "velocity": 100
                         },
                         {
-                            "step": 59,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 60,
                             "length": 2,
                             "pitch": 55,
@@ -2778,294 +2888,16 @@
                             "velocity": 100
                         },
                         {
-                            "step": 8,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 11,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 12,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
                         },
                         {
-                            "step": 18,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 20,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 24,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 26,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 28,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 35,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 36,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 40,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 43,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 44,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 50,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 52,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 56,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 58,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 60,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        }
-                    ]
-                },
-                {
-                    "notes": [
-                        {
-                            "step": 3,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 4,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 8,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 11,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 12,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 18,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 20,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 24,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 26,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 28,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 35,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 36,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 40,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 43,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 44,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 48,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 51,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 52,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 56,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 59,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 60,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        }
-                    ]
-                },
-                {
-                    "notes": [
-                        {
-                            "step": 3,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 4,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 8,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 11,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 12,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 19,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 20,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 24,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 27,
@@ -3080,12 +2912,6 @@
                             "velocity": 100
                         },
                         {
-                            "step": 32,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 35,
                             "length": 1,
                             "pitch": 84,
@@ -3098,40 +2924,10 @@
                             "velocity": 100
                         },
                         {
-                            "step": 40,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 42,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 43,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 44,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 48,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 51,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 52,
@@ -3140,18 +2936,6 @@
                             "velocity": 100
                         },
                         {
-                            "step": 56,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 59,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 60,
                             "length": 2,
                             "pitch": 55,
@@ -3162,194 +2946,16 @@
                 {
                     "notes": [
                         {
-                            "step": 2,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 4,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 8,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 10,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 11,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 12,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 16,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 19,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 20,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 24,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 27,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 28,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 32,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 35,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 36,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 43,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 44,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 51,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 52,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        },
-                        {
-                            "step": 56,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 59,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 60,
-                            "length": 2,
-                            "pitch": 55,
-                            "velocity": 100
-                        }
-                    ]
-                },
-                {
-                    "notes": [
-                        {
-                            "step": 7,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 8,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
                         },
                         {
-                            "step": 12,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 16,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 23,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 24,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 28,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 32,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 39,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 40,
@@ -3358,18 +2964,6 @@
                             "velocity": 100
                         },
                         {
-                            "step": 44,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 55,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 56,
                             "length": 2,
                             "pitch": 55,
@@ -3380,34 +2974,10 @@
                 {
                     "notes": [
                         {
-                            "step": 7,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 8,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 12,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 16,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 23,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 24,
@@ -3416,58 +2986,16 @@
                             "velocity": 100
                         },
                         {
-                            "step": 28,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 32,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 39,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 40,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
                         },
                         {
-                            "step": 44,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 48,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 55,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 56,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 60,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 61,
@@ -3480,28 +3008,10 @@
                 {
                     "notes": [
                         {
-                            "step": 3,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 4,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 8,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 11,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 12,
@@ -3516,22 +3026,10 @@
                             "velocity": 100
                         },
                         {
-                            "step": 26,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 28,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 32,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 35,
@@ -3546,40 +3044,16 @@
                             "velocity": 100
                         },
                         {
-                            "step": 40,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 43,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 44,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
                         },
                         {
-                            "step": 50,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 52,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 58,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 60,
@@ -3592,12 +3066,6 @@
                 {
                     "notes": [
                         {
-                            "step": 0,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 3,
                             "length": 1,
                             "pitch": 84,
@@ -3608,18 +3076,6 @@
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 8,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 11,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 12,
@@ -3634,22 +3090,10 @@
                             "velocity": 100
                         },
                         {
-                            "step": 26,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 28,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 32,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 35,
@@ -3664,52 +3108,16 @@
                             "velocity": 100
                         },
                         {
-                            "step": 40,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 43,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 44,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
                         },
                         {
-                            "step": 48,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 51,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
                             "step": 52,
                             "length": 2,
                             "pitch": 55,
                             "velocity": 100
-                        },
-                        {
-                            "step": 56,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
-                        },
-                        {
-                            "step": 59,
-                            "length": 1,
-                            "pitch": 84,
-                            "velocity": 60
                         },
                         {
                             "step": 60,
@@ -3739,25 +3147,35 @@
                 },
                 {
                     "bar": 16,
-                    "pattern": 4
+                    "pattern": 2
                 },
                 {
                     "bar": 20,
-                    "pattern": 5
+                    "pattern": 4
                 },
                 {
                     "bar": 24,
-                    "pattern": 6
+                    "pattern": 5
                 },
                 {
                     "bar": 28,
-                    "pattern": 7
+                    "pattern": 6
                 },
                 {
                     "bar": 32,
-                    "pattern": 8
+                    "pattern": 7
                 }
-            ]
+            ],
+            "instrument": {
+                "volume": 0.25,
+                "attack": 0.002,
+                "decay": 0.0,
+                "sustain": 1.0,
+                "release": 0.12,
+                "vibrato": 0.4,
+                "vibratoHertz": 5.5,
+                "sweep": -120.0
+            }
         },
         {
             "name": "SAMPLE",
@@ -3769,7 +3187,17 @@
                     "notes": []
                 }
             ],
-            "blocks": []
+            "blocks": [],
+            "instrument": {
+                "volume": 0.15,
+                "attack": 0.002,
+                "decay": 0.0,
+                "sustain": 0.0,
+                "release": 0.01,
+                "vibrato": 0.0,
+                "vibratoHertz": 4.0,
+                "sweep": 0.0
+            }
         }
     ]
 }

@@ -12,7 +12,7 @@
 // The transport holds two rows: the files above, the playing below.
 constexpr float TRANSPORT_HEIGHT = 31.0f;
 constexpr float STATUS_HEIGHT = 11.0f;
-constexpr float CHANNEL_WIDTH = 84.0f;
+constexpr float CHANNEL_WIDTH = 104.0f;
 
 constexpr float GAP = 3.0f;
 
@@ -29,7 +29,7 @@ StudioView::StudioView(App &app)
 
         channel.name = name;
         channel.colour = colour;
-        channel.wave = wave;
+        channel.instrument.wave = wave;
 
         channels.push_back(std::move(channel));
     };
@@ -170,7 +170,7 @@ void StudioView::PlayPreview(const PianoRoll::Preview &asked) {
 
     // A note with a length plays on its own, a held key needs to be let go
     float seconds = static_cast<float>(asked.steps) * SecondsPerStep();
-    int voice = synth.Play(asked.pitch, channel.wave, seconds);
+    int voice = synth.Play(asked.pitch, channel.instrument, seconds);
 
     if (asked.steps == 0) {
         synth.Stop(heldVoice);
@@ -210,7 +210,12 @@ void StudioView::PlayReachedNotes() {
                 int at = start + note.step;
 
                 if (at > playedThrough && at <= reached) {
-                    synth.Play(note.pitch, channel.wave, static_cast<float>(note.length) * SecondsPerStep());
+                    synth.Play(
+                        note.pitch,
+                        channel.instrument,
+                        static_cast<float>(note.length) * SecondsPerStep(),
+                        static_cast<float>(note.velocity) / 100.0f
+                    );
                 }
             }
         }
@@ -229,6 +234,12 @@ void StudioView::RestartPlayback() {
 
 void StudioView::Update(float dt) {
     synth.Update();
+
+    // A pattern that was written longer takes the bars behind it, whatever
+    // stood there before gives way
+    for (Channel &channel: channels) {
+        channel.Tidy();
+    }
 
     if (playing) {
         PlayReachedNotes();
@@ -282,7 +293,17 @@ StudioView::Layout StudioView::LayoutFor(const Ui &) const {
     float top = layout.transport.height + GAP;
     float bottom = layout.status.y - GAP;
 
-    layout.channels = {GAP, top, CHANNEL_WIDTH, bottom - top};
+    // The list is only as tall as it has rows, the instrument sits below it
+    float row = Widgets::RowHeight(app.GetFont());
+    float list = row + static_cast<float>(channels.size()) * (row + 1.0f) + 2.0f;
+
+    layout.channels = {GAP, top, CHANNEL_WIDTH, std::min(list, bottom - top)};
+    layout.instrument = {
+        GAP,
+        layout.channels.y + layout.channels.height + GAP,
+        CHANNEL_WIDTH,
+        std::max(bottom - layout.channels.y - layout.channels.height - GAP, 0.0f)
+    };
     layout.middle = {
         layout.channels.x + layout.channels.width + GAP,
         top,
@@ -298,6 +319,7 @@ void StudioView::Draw(Ui &ui) {
 
     DrawTransport(ui, layout.transport);
     DrawChannels(ui, layout.channels);
+    DrawInstrument(ui, layout.instrument);
 
     if (rollOpen) {
         DrawPattern(ui, layout.middle);
@@ -476,6 +498,99 @@ void StudioView::DrawChannels(Ui &ui, Rectangle bounds) {
         }
 
         y += row + 1.0f;
+    }
+}
+
+// How the chosen channel sounds. Everything a note needs is here: the wave it
+// is made of, how loud it is and how it comes and goes.
+//
+// The four times are the ones of every synthesizer, see Synth::Instrument. A
+// plucked bass has a short decay and no sustain, an organ neither of both.
+void StudioView::DrawInstrument(Ui &ui, Rectangle bounds) {
+    if (bounds.height < Widgets::RowHeight(ui.font) * 2.0f) {
+        return;
+    }
+
+    Widgets::Panel(ui, bounds);
+
+    Synth::Instrument &instrument = channels[current].instrument;
+
+    float row = Widgets::RowHeight(ui.font);
+
+    Widgets::Label(ui, {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING}, "INSTRUMENT",
+                   ui.theme.mutedVariant);
+
+    float y = bounds.y + row + 1.0f;
+
+    auto place = [&]() {
+        Rectangle line{bounds.x + 2.0f, y, bounds.width - 4.0f, row};
+
+        y += row + 1.0f;
+
+        return line;
+    };
+
+    // A time grows by a quarter of itself, so the short ones can be set
+    // exactly and the long ones are reached in a few clicks
+    auto nudge = [](float seconds, int turn) {
+        float step = std::max(std::round(seconds * 1000.0f * 0.25f), 5.0f) / 1000.0f;
+
+        return std::clamp(seconds + static_cast<float>(turn) * step, 0.0f, 4.0f);
+    };
+
+    auto millis = [](float seconds) {
+        return std::to_string(static_cast<int>(std::round(seconds * 1000.0f)));
+    };
+
+    auto percent = [](float share) {
+        return std::to_string(static_cast<int>(std::round(share * 100.0f)));
+    };
+
+    // The wave, by its name
+    if (int turn = Widgets::Stepper(ui, place(), "", Synth::WaveName(instrument.wave)); turn != 0) {
+        const auto &waves = Synth::WAVES;
+
+        std::size_t at = 0;
+
+        for (std::size_t i = 0; i < waves.size(); i++) {
+            if (waves[i] == instrument.wave) {
+                at = i;
+            }
+        }
+
+        instrument.wave = waves[(at + waves.size() + static_cast<std::size_t>(turn)) % waves.size()];
+
+        // Hearing it right away beats reading its name
+        synth.Play(69, instrument, 0.25f);
+    }
+
+    if (int turn = Widgets::Stepper(ui, place(), "VOL", percent(instrument.volume)); turn != 0) {
+        instrument.volume = std::clamp(instrument.volume + static_cast<float>(turn) * 0.05f, 0.0f, 1.0f);
+    }
+
+    if (int turn = Widgets::Stepper(ui, place(), "ATT", millis(instrument.attack)); turn != 0) {
+        instrument.attack = nudge(instrument.attack, turn);
+    }
+
+    if (int turn = Widgets::Stepper(ui, place(), "DEC", millis(instrument.decay)); turn != 0) {
+        instrument.decay = nudge(instrument.decay, turn);
+    }
+
+    if (int turn = Widgets::Stepper(ui, place(), "SUS", percent(instrument.sustain)); turn != 0) {
+        instrument.sustain = std::clamp(instrument.sustain + static_cast<float>(turn) * 0.1f, 0.0f, 1.0f);
+    }
+
+    if (int turn = Widgets::Stepper(ui, place(), "REL", millis(instrument.release)); turn != 0) {
+        instrument.release = nudge(instrument.release, turn);
+    }
+
+    if (int turn = Widgets::Stepper(ui, place(), "VIB", percent(instrument.vibrato)); turn != 0) {
+        instrument.vibrato = std::clamp(instrument.vibrato + static_cast<float>(turn) * 0.05f, 0.0f, 2.0f);
+    }
+
+    if (int turn = Widgets::Stepper(ui, place(), "SWP", std::to_string(static_cast<int>(instrument.sweep)));
+        turn != 0) {
+        instrument.sweep = std::clamp(instrument.sweep + static_cast<float>(turn) * 4.0f, -240.0f, 240.0f);
     }
 }
 

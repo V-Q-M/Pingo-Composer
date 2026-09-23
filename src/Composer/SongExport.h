@@ -38,15 +38,15 @@ public:
     // How long the events last in steps, including the last note
     static int Steps(const std::vector<Event> &events);
 
-    // Renders the events with the waves of their channels
+    // Renders the events with the instruments of their channels
     static std::vector<short> Render(const std::vector<Event> &events,
-                                     const std::vector<Synth::Wave> &waves,
+                                     const std::vector<Synth::Instrument> &instruments,
                                      int tempo);
 
     // false when the file could not be written
     static bool WriteWave(const std::string &file,
                           const std::vector<Event> &events,
-                          const std::vector<Synth::Wave> &waves,
+                          const std::vector<Synth::Instrument> &instruments,
                           int tempo);
 
     // names is one track name per channel, e.g. "PULSE 1"

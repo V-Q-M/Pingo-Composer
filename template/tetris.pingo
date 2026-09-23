@@ -3,7 +3,7 @@
     "channels": [
         {
             "name": "PULSE 1",
-            "wave": "square",
+            "wave": "pulse",
             "colour": "#00f9ff",
             "muted": false,
             "patterns": [
@@ -247,11 +247,21 @@
                     "bar": 4,
                     "pattern": 1
                 }
-            ]
+            ],
+            "instrument": {
+                "volume": 0.55,
+                "attack": 0.002,
+                "decay": 0.0,
+                "sustain": 1.0,
+                "release": 0.04,
+                "vibrato": 0.0,
+                "vibratoHertz": 5.5,
+                "sweep": 0.0
+            }
         },
         {
             "name": "PULSE 2",
-            "wave": "pulse",
+            "wave": "square",
             "colour": "#3dff14",
             "muted": false,
             "patterns": [
@@ -365,7 +375,17 @@
                     "bar": 4,
                     "pattern": 0
                 }
-            ]
+            ],
+            "instrument": {
+                "volume": 0.3,
+                "attack": 0.002,
+                "decay": 0.12,
+                "sustain": 0.5,
+                "release": 0.06,
+                "vibrato": 0.0,
+                "vibratoHertz": 5.5,
+                "sweep": 0.0
+            }
         },
         {
             "name": "TRIANGLE",
@@ -579,7 +599,17 @@
                     "bar": 4,
                     "pattern": 0
                 }
-            ]
+            ],
+            "instrument": {
+                "volume": 0.8,
+                "attack": 0.002,
+                "decay": 0.0,
+                "sustain": 1.0,
+                "release": 0.02,
+                "vibrato": 0.0,
+                "vibratoHertz": 5.5,
+                "sweep": 0.0
+            }
         },
         {
             "name": "NOISE",
@@ -697,7 +727,17 @@
                     "bar": 7,
                     "pattern": 0
                 }
-            ]
+            ],
+            "instrument": {
+                "volume": 0.45,
+                "attack": 0.002,
+                "decay": 0.07,
+                "sustain": 0.0,
+                "release": 0.02,
+                "vibrato": 0.0,
+                "vibratoHertz": 5.5,
+                "sweep": 0.0
+            }
         },
         {
             "name": "SAMPLE",

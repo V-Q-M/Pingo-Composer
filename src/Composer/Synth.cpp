@@ -7,20 +7,25 @@
 // after a click, but also costs more work per second.
 constexpr int SYNTH_BUFFER = 1024;
 
-// How long a note takes to come and to go, in seconds. Without them every
-// note would start and end with a click.
-constexpr float ATTACK_SECONDS = 0.004f;
-constexpr float RELEASE_SECONDS = 0.05f;
-
 // All voices together never reach the edge, so a chord does not clip
 constexpr float MASTER_VOLUME = 0.35f;
 
-// The pulse voice is on for this much of its period
+// How much of its period a pulse is on
 constexpr float PULSE_DUTY = 0.25f;
+constexpr float THIN_DUTY = 0.125f;
+
+// However short a time is set, this much is always taken: a note that starts
+// or ends in no time at all clicks
+constexpr float SHORTEST_SECONDS = 0.002f;
 
 // The A above the middle C, and its pitch
 constexpr float TUNING_HERTZ = 440.0f;
 constexpr int TUNING_PITCH = 69;
+
+// The noise of a chip is a shift register: the long way round it never
+// repeats for the ear, the short way round it does and gets a pitch
+constexpr int NOISE_TAP = 1;
+constexpr int METAL_TAP = 6;
 
 const char *Synth::WaveName(Wave wave) {
     switch (wave) {
@@ -30,18 +35,27 @@ const char *Synth::WaveName(Wave wave) {
         case Wave::Pulse:
             return "pulse";
 
+        case Wave::Thin:
+            return "thin";
+
         case Wave::Triangle:
             return "triangle";
 
+        case Wave::Saw:
+            return "saw";
+
         case Wave::Noise:
             return "noise";
+
+        case Wave::Metal:
+            return "metal";
     }
 
     return "square";
 }
 
 Synth::Wave Synth::WaveFromName(const std::string &name) {
-    for (Wave wave: {Wave::Square, Wave::Pulse, Wave::Triangle, Wave::Noise}) {
+    for (Wave wave: WAVES) {
         if (name == WaveName(wave)) {
             return wave;
         }
@@ -76,7 +90,7 @@ float Synth::FrequencyOf(int pitch) {
     return TUNING_HERTZ * std::pow(2.0f, static_cast<float>(pitch - TUNING_PITCH) / 12.0f);
 }
 
-int Synth::Play(int pitch, Wave wave, float seconds, float volume) {
+int Synth::Play(int pitch, const Instrument &instrument, float seconds, float loudness) {
     // The voice that is silent, otherwise the one that is furthest along
     std::size_t chosen = 0;
     float quietest = 2.0f;
@@ -97,10 +111,11 @@ int Synth::Play(int pitch, Wave wave, float seconds, float volume) {
     Voice &voice = voices[chosen];
 
     voice.stage = Stage::Attack;
-    voice.wave = wave;
+    voice.instrument = instrument;
     voice.phase = 0.0f;
     voice.step = FrequencyOf(pitch) / static_cast<float>(SAMPLE_RATE);
-    voice.volume = std::clamp(volume, 0.0f, 1.0f);
+    voice.age = 0.0f;
+    voice.volume = std::clamp(instrument.volume * loudness, 0.0f, 1.0f);
     voice.level = 0.0f;
     voice.left = seconds > 0.0f ? static_cast<int>(seconds * SAMPLE_RATE) : -1;
     voice.noise = 1;
@@ -138,17 +153,24 @@ void Synth::StopAll() {
 
 // One sample of the waveform, from -1 to 1
 float Synth::Shape(const Voice &voice) {
-    switch (voice.wave) {
+    switch (voice.instrument.wave) {
         case Wave::Square:
             return voice.phase < 0.5f ? 1.0f : -1.0f;
 
         case Wave::Pulse:
             return voice.phase < PULSE_DUTY ? 1.0f : -1.0f;
 
+        case Wave::Thin:
+            return voice.phase < THIN_DUTY ? 1.0f : -1.0f;
+
         case Wave::Triangle:
             return 4.0f * std::abs(voice.phase - 0.5f) - 1.0f;
 
+        case Wave::Saw:
+            return 2.0f * voice.phase - 1.0f;
+
         case Wave::Noise:
+        case Wave::Metal:
             return voice.last;
     }
 
@@ -156,8 +178,7 @@ float Synth::Shape(const Voice &voice) {
 }
 
 void Synth::Render(short *samples, int count) {
-    const float attack = 1.0f / (ATTACK_SECONDS * SAMPLE_RATE);
-    const float release = 1.0f / (RELEASE_SECONDS * SAMPLE_RATE);
+    const float perSample = 1.0f / static_cast<float>(SAMPLE_RATE);
 
     for (int i = 0; i < count; i++) {
         float mixed = 0.0f;
@@ -167,27 +188,66 @@ void Synth::Render(short *samples, int count) {
                 continue;
             }
 
-            // The noise takes a new value every period, like a shift register
-            if (voice.wave == Wave::Noise && voice.phase + voice.step >= 1.0f) {
-                voice.noise = voice.noise * 1103515245u + 12345u;
-                voice.last = static_cast<float>((voice.noise >> 16) & 1u) * 2.0f - 1.0f;
+            const Instrument &instrument = voice.instrument;
+
+            bool noisy = instrument.wave == Wave::Noise || instrument.wave == Wave::Metal;
+
+            // The noise takes a new value every period. Which bit it listens
+            // to decides whether it repeats: the short way round rings.
+            if (noisy && voice.phase + voice.step >= 1.0f) {
+                int tap = instrument.wave == Wave::Metal ? METAL_TAP : NOISE_TAP;
+
+                std::uint32_t bit = (voice.noise ^ (voice.noise >> tap)) & 1u;
+
+                voice.noise = (voice.noise >> 1) | (bit << 14);
+                voice.last = (voice.noise & 1u) != 0u ? 1.0f : -1.0f;
             }
 
             mixed += Shape(voice) * voice.level * voice.volume;
 
-            voice.phase += voice.step;
+            // The vibrato swings the pitch, the sweep walks it away
+            float bend = 0.0f;
 
-            if (voice.phase >= 1.0f) {
-                voice.phase -= 1.0f;
+            if (instrument.vibrato > 0.0f) {
+                bend += instrument.vibrato *
+                        std::sin(6.2831853f * instrument.vibratoHertz * voice.age);
             }
 
-            // Comes in, holds, and goes out again
+            bend += instrument.sweep * voice.age;
+
+            voice.phase += bend != 0.0f ? voice.step * std::pow(2.0f, bend / 12.0f) : voice.step;
+            voice.age += perSample;
+
+            if (voice.phase >= 1.0f) {
+                voice.phase -= std::floor(voice.phase);
+            }
+
+            // Comes in, falls to the sustain, holds and goes out again
+            float attack = 1.0f / (std::max(instrument.attack, SHORTEST_SECONDS) * SAMPLE_RATE);
+            float decay = 1.0f / (std::max(instrument.decay, SHORTEST_SECONDS) * SAMPLE_RATE);
+            float release = 1.0f / (std::max(instrument.release, SHORTEST_SECONDS) * SAMPLE_RATE);
+
+            float sustain = std::clamp(instrument.sustain, 0.0f, 1.0f);
+
             if (voice.stage == Stage::Attack) {
                 voice.level += attack;
 
                 if (voice.level >= 1.0f) {
                     voice.level = 1.0f;
+                    voice.stage = instrument.decay > 0.0f ? Stage::Decay : Stage::Hold;
+                }
+            } else if (voice.stage == Stage::Decay) {
+                voice.level -= decay * (1.0f - sustain);
+
+                if (voice.level <= sustain) {
+                    voice.level = sustain;
                     voice.stage = Stage::Hold;
+                }
+
+                // An instrument without any sustain is done once it is quiet
+                if (voice.level <= 0.0f) {
+                    voice.level = 0.0f;
+                    voice.stage = Stage::Silent;
                 }
             } else if (voice.stage == Stage::Release) {
                 voice.level -= release;
