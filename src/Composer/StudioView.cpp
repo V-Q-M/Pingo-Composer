@@ -18,6 +18,13 @@ constexpr float CHANNEL_WIDTH = 104.0f;
 
 constexpr float GAP = 3.0f;
 
+// How long an answer of a save, export or open stays in the status line
+constexpr float REPORT_SECONDS = 4.0f;
+
+// A system panel or a dragged window stops the frame loop, and the next frame
+// then reports all of that time. The song must not jump ahead by it.
+constexpr float LONGEST_FRAME_SECONDS = 0.1f;
+
 constexpr int TEMPO_MIN = 40;
 constexpr int TEMPO_MAX = 300;
 constexpr int TEMPO_STEP = 5;
@@ -61,7 +68,7 @@ void StudioView::Save() {
 
     bool written = SongFile::Save(songFile, channels, tempo);
 
-    report = written ? "Saved " + NameOf(songFile) : "Could not save";
+    Say(written ? "Saved " + NameOf(songFile) : "Could not save");
 
     if (!written) {
         songFile.clear();
@@ -96,7 +103,7 @@ void StudioView::Open() {
     bool read = midi ? MidiFile::Load(file, channels, tempo) : SongFile::Load(file, channels, tempo);
 
     if (!read) {
-        report = "Could not open " + NameOf(file);
+        Say("Could not open " + NameOf(file));
         return;
     }
 
@@ -105,7 +112,7 @@ void StudioView::Open() {
 
     AfterLoading();
 
-    report = (midi ? "Imported " : "Opened ") + NameOf(file);
+    Say((midi ? "Imported " : "Opened ") + NameOf(file));
 }
 
 // Everything that pointed into the old song starts over
@@ -146,13 +153,18 @@ void StudioView::Export() {
 
     bool written = SongExport::Write(file, events, used, tempo);
 
-    report = written ? "Saved " + std::to_string(events.size()) + " notes" : "Nothing to save";
+    Say(written ? "Saved " + std::to_string(events.size()) + " notes" : "Nothing to save");
 }
 
 Pattern &StudioView::CurrentPattern() {
     Channel &channel = channels[current];
 
     return channel.patterns[static_cast<std::size_t>(channel.Reserve(currentPattern))];
+}
+
+void StudioView::Say(const std::string &text) {
+    report = text;
+    reportSeconds = REPORT_SECONDS;
 }
 
 float StudioView::SecondsPerStep() const {
@@ -238,7 +250,18 @@ void StudioView::RestartPlayback() {
 }
 
 void StudioView::Update(float dt) {
+    dt = std::min(dt, LONGEST_FRAME_SECONDS);
+
     synth.Update();
+
+    // The answer in the status line gives way to the place in the song again
+    if (!report.empty()) {
+        reportSeconds -= dt;
+
+        if (reportSeconds <= 0.0f) {
+            report.clear();
+        }
+    }
 
     // A pattern that was written longer takes the bars behind it, whatever
     // stood there before gives way

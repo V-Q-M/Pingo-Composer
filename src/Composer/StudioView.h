@@ -72,6 +72,9 @@ private:
     // jump. The note right under it belongs to the new place and sounds.
     void RestartPlayback();
 
+    // Writes an answer into the status line, in place of the place in the song
+    void Say(const std::string &text);
+
     // How long a step lasts at the tempo right now
     float SecondsPerStep() const;
 
@@ -97,8 +100,10 @@ private:
     // Starts over after a song was read
     void AfterLoading();
 
-    // What the last save, export or open did, shown in the status line
+    // What the last save, export or open did, shown in the status line until
+    // reportSeconds are over
     std::string report;
+    float reportSeconds = 0.0f;
 
     // Where the song was saved, empty as long as it has no file yet
     std::string songFile;
