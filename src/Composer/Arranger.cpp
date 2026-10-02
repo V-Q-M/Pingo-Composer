@@ -296,9 +296,10 @@ void Arranger::HandleClipboard(Ui &ui, const Grid &grid, std::vector<Channel> &c
 
     bool known = inside && bar >= 0 && bar < Channel::BARS && row >= 0 && row < static_cast<int>(channels.size());
 
-    // The block under the mouse is copied, or the one that was picked first
+    // The block under the mouse is copied, or the one that was picked first.
+    // Bars behind a long block belong to it, so it counts from where it starts.
     if (IsKeyPressed(KEY_C)) {
-        Block block{row, bar};
+        Block block{row, known ? channels[static_cast<std::size_t>(row)].StartOf(bar) : bar};
 
         if (!known && !chosen.empty()) {
             block = chosen.front();
@@ -313,7 +314,9 @@ void Arranger::HandleClipboard(Ui &ui, const Grid &grid, std::vector<Channel> &c
         }
     }
 
-    // Writing it again makes a pattern of its own in that channel
+    // Writing it again makes a pattern of its own in that channel. On a block it
+    // takes the place of that block, from the bar the block starts in: a block
+    // that starts inside another one would be cleared again by Channel::Tidy.
     if (IsKeyPressed(KEY_V) && known && !clipboard.Empty()) {
         Channel &channel = channels[static_cast<std::size_t>(row)];
 
@@ -327,7 +330,9 @@ void Arranger::HandleClipboard(Ui &ui, const Grid &grid, std::vector<Channel> &c
             pattern.Add(note);
         }
 
-        channel.Set(bar, index);
+        int start = channel.StartOf(bar);
+
+        Place(channel, start == Channel::EMPTY ? bar : start, index);
     }
 }
 
@@ -414,7 +419,7 @@ void Arranger::HandleMouse(Ui &ui, const Grid &grid, std::vector<Channel> &chann
     // Control picks single blocks, so several of them can be taken away or
     // copied at once
     if (ui.clicked && ui.control) {
-        Block block{row, bar};
+        Block block{row, start};
 
         if (IsChosen(block)) {
             chosen.erase(std::remove(chosen.begin(), chosen.end(), block), chosen.end());
