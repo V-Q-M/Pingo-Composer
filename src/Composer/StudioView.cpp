@@ -1,5 +1,6 @@
 #include "StudioView.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 
@@ -109,6 +110,9 @@ void StudioView::Open() {
 
 // Everything that pointed into the old song starts over
 void StudioView::AfterLoading() {
+    // A file may name any tempo, e.g. none at all or one no hand could play
+    tempo = std::clamp(tempo, TEMPO_MIN, TEMPO_MAX);
+
     current = 0;
     currentPattern = 0;
     rollOpen = false;
