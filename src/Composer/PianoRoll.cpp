@@ -350,7 +350,13 @@ void PianoRoll::DrawNotes(Ui &ui, const Grid &grid, const Pattern &pattern, Colo
             continue;
         }
 
-        Rectangle bounds{x, y, std::max(width - 1.0f, 2.0f), PITCH_HEIGHT - 1.0f};
+        // After zooming a step is not a whole number of pixels wide. Both edges
+        // are rounded on their own, so the notes stay on the pixel grid and
+        // their borders are always one pixel thick.
+        float left = std::round(x);
+        float right = std::round(x + width);
+
+        Rectangle bounds{left, y, std::max(right - left - 1.0f, 2.0f), PITCH_HEIGHT - 1.0f};
 
         // A quiet note is darker, so the volume can be seen
         float shade = NOTE_MIN_SHADE + (1.0f - NOTE_MIN_SHADE) * static_cast<float>(note.velocity) / 100.0f;
