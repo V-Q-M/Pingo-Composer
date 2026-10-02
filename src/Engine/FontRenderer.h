@@ -5,6 +5,7 @@
 
 #include "raylib.h"
 
+#include "FontSpacing.h"
 #include "TextSpacing.h"
 
 // The color rows of the atlas, from top to bottom. Whoever adds a color or
@@ -37,8 +38,13 @@ struct FontVariant {
 // follow at the very bottom, they only exist in white, grey and yellow. In
 // other colors they are drawn white.
 //
-// Text is UTF-8. Besides ASCII the font knows Ae, Oe, Ue and sz, lowercase
-// letters are drawn as capitals.
+// A cell is higher than the letters in it: two pixels of air on top, then the
+// letter, then the pixels the tails of g, j, p, q and y go into. A row of
+// text is as high as a cell, so letters sit in the middle of everything that
+// is drawn behind them, e.g. a caret or an input field.
+//
+// Text is UTF-8. Besides ASCII the font knows Ae, Oe, Ue and sz. An older
+// atlas without lowercase letters draws them as capitals, see RowFor.
 class FontRenderer {
 public:
     // Arrows from the atlas. Usable as characters in a string, e.g.
@@ -97,6 +103,11 @@ public:
     // them without a space.
     int Advance(TextSpacing spacing) const;
 
+    // The rules from assets/fontSpacing.json: what every single character
+    // takes. Without them a character takes the width of a cell, minus the
+    // empty columns it was drawn with.
+    void SetSpacing(FontSpacing rules);
+
     // Can the font draw this character? The space counts, control characters
     // like arrows and icons do not: they are not typed.
     static bool CanDraw(int codepoint);
@@ -104,11 +115,18 @@ public:
     // The character as UTF-8, e.g. for typed umlauts
     static std::string Encode(int codepoint);
 
+    // The first character of a text, e.g. of an entry in fontSpacing.json.
+    // -1 for broken UTF-8, 0 for an empty text.
+    static int FirstCodepoint(const std::string &text);
+
     // Number of characters, not bytes
     static std::size_t GlyphCount(const std::string &text);
 
     // Removes the last character, even if it consists of several bytes
     static void RemoveLastGlyph(std::string &text);
+
+    // The gap in front of a text caret, from fontSpacing.json
+    int CaretSpace() const;
 
     int LetterWidth() const;
 
@@ -118,16 +136,25 @@ public:
     int VariantCount() const;
 
 private:
-    // Which group of atlas rows a character is in
+    // Which group of atlas rows a character is in, in the order of the atlas:
+    // capitals, lowercase letters, digits with the characters of arithmetic,
+    // the other special characters, and the icons at the bottom. Each of the
+    // first four has one row per color. An older atlas with fewer groups
+    // leaves out what it does not have, see RowFor.
     static constexpr int LETTER_GROUP = 0;
-    static constexpr int DIGIT_GROUP = 1;
-    static constexpr int ICON_GROUP = 2;
+    static constexpr int LOWER_GROUP = 1;
+    static constexpr int DIGIT_GROUP = 2;
+    static constexpr int SPECIAL_GROUP = 3;
+    static constexpr int ICON_GROUP = 4;
 
     // White, grey and yellow
     static constexpr int ICON_VARIANT_COUNT = 3;
 
     // Space after an icon, about half a space
     static constexpr int ICON_GAP = 2;
+
+    // Narrow text takes one pixel less per character, see TextSpacing
+    static constexpr int NARROW_GAP = 1;
 
     struct Cell {
         int column;
@@ -151,8 +178,14 @@ private:
     // menus losing their reference to the FontRenderer
     Texture2D *texture = nullptr;
 
+    // What every character takes, see SetSpacing
+    FontSpacing spacingRules;
+
     int letterWidth = 0;
     int letterHeight = 0;
     int variantCount = 0;
     int iconVariantCount = 0;
+
+    // How many groups of color rows the atlas has, four in the current one
+    int colouredGroups = 0;
 };

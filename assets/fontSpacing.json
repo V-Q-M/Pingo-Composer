@@ -1,0 +1,34 @@
+{
+  "defaultSpacing": 7,
+  "spaceWidth": 4,
+  "iconSpace": 9,
+  "caretSpace": 1,
+  "groups": [
+    {
+      "characters": [
+        "'",
+        "|",
+        "!"
+      ],
+      "spacing": 5
+    },
+    {
+      "characters": [
+        ".",
+        ",",
+        ":",
+        ";"
+      ],
+      "spacing": 6
+    },
+    {
+      "characters": [
+        "&",
+        "=",
+        "~",
+        "/"
+      ],
+      "spacing": 8
+    }
+  ]
+}

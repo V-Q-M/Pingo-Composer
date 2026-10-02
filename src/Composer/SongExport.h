@@ -49,7 +49,7 @@ public:
                           const std::vector<Synth::Instrument> &instruments,
                           int tempo);
 
-    // names is one track name per channel, e.g. "PULSE 1"
+    // names is one track name per channel, e.g. "Pulse 1"
     static bool WriteMidi(const std::string &file,
                           const std::vector<Event> &events,
                           const std::vector<std::string> &names,

@@ -25,7 +25,7 @@ struct AppOptions {
     // Font atlas and its cell size, see FontRenderer
     std::string font = "fonts/game_font.png";
     int letterWidth = 8;
-    int letterHeight = 8;
+    int letterHeight = 12;
 };
 
 // Window, canvas, font and the frame loop.

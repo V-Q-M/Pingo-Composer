@@ -132,7 +132,7 @@ bool SongFile::Load(const std::string &file, std::vector<Channel> &channels, int
     for (const json &entry: song["channels"]) {
         Channel channel;
 
-        channel.name = entry.value("name", std::string("CHANNEL"));
+        channel.name = entry.value("name", std::string("Channel"));
         Synth::Instrument &instrument = channel.instrument;
 
         instrument.wave = Synth::WaveFromName(entry.value("wave", std::string("square")));

@@ -256,7 +256,7 @@ bool MidiFile::Load(const std::string &file, std::vector<Channel> &channels, int
 
         std::size_t index = read.size();
 
-        channel.name = track.name.empty() ? "TRACK " + std::to_string(number + 1) : track.name;
+        channel.name = track.name.empty() ? "Track " + std::to_string(number + 1) : track.name;
         channel.colour = IMPORT_COLOURS[index % std::size(IMPORT_COLOURS)];
         channel.instrument.wave = number == DRUM_CHANNEL
                                       ? Synth::Wave::Noise

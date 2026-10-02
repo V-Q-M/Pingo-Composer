@@ -13,7 +13,7 @@
 // mouse did with it, there is no list of widgets to keep in sync with the
 // program. A view therefore reads like what it shows:
 //
-//     if (Widgets::Button(ui, {4, 4, 40, 11}, "PLAY")) {
+//     if (Widgets::Button(ui, {4, 4, 40, 11}, "Play")) {
 //         player.Start();
 //     }
 //

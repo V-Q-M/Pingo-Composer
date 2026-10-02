@@ -10,10 +10,17 @@ FontRenderer::FontRenderer(Texture2D &texture, int letterWidth, int letterHeight
       letterHeight(letterHeight) {
     int rows = texture.height / letterHeight;
 
-    // Letters and digits have one row per color each, the icons lie below them.
-    // An older atlas without icons simply does not draw them.
+    // Every group has one row per color, the icons follow at the bottom. How
+    // many groups the atlas has comes from its height, so an older one with
+    // fewer of them still works.
     variantCount = std::min(rows / 2, FontVariant::Count);
-    iconVariantCount = std::clamp(rows - 2 * variantCount, 0, ICON_VARIANT_COUNT);
+    colouredGroups = std::max((rows - ICON_VARIANT_COUNT) / std::max(variantCount, 1), 1);
+
+    iconVariantCount = std::clamp(rows - colouredGroups * variantCount, 0, ICON_VARIANT_COUNT);
+}
+
+int FontRenderer::CaretSpace() const {
+    return spacingRules.CaretSpace();
 }
 
 int FontRenderer::LetterWidth() const {
@@ -29,21 +36,44 @@ int FontRenderer::VariantCount() const {
 }
 
 int FontRenderer::Advance(TextSpacing spacing) const {
-    // Every cell has an empty column on the left and the right. Leaving one of
-    // them out halves the spacing between the characters.
-    return spacing == TextSpacing::Narrow ? letterWidth - 1 : letterWidth;
+    int narrower = spacing == TextSpacing::Narrow ? NARROW_GAP : 0;
+
+    if (spacingRules.IsLoaded()) {
+        return std::max(spacingRules.DefaultSpacing() - narrower, 1);
+    }
+
+    // Without the file: a cell is wider than the letter in it, so one of the
+    // empty columns is left out and the letters stand as they were drawn
+    return letterWidth - 1 - narrower;
+}
+
+void FontRenderer::SetSpacing(FontSpacing rules) {
+    spacingRules = std::move(rules);
 }
 
 // A space only advances half as far as a letter. With an odd width it
 // rounds up, so words do not stick together.
 int FontRenderer::CharacterAdvance(int codepoint, TextSpacing spacing) const {
     int advance = Advance(spacing);
+    int narrower = spacing == TextSpacing::Narrow ? NARROW_GAP : 0;
 
+    // An icon fills its cell to the edge, so it keeps its width even in
+    // narrow text. Text follows it without a space of its own.
     if (IsIcon(codepoint)) {
-        return advance + ICON_GAP;
+        return spacingRules.IconSpace() > 0 ? spacingRules.IconSpace() : advance + ICON_GAP;
     }
 
-    return codepoint == ' ' ? (advance + 1) / 2 : advance;
+    if (codepoint == ' ') {
+        return spacingRules.IsLoaded()
+                   ? std::max(spacingRules.SpaceWidth() - narrower, 1)
+                   : (advance + 1) / 2;
+    }
+
+    // What a group of fontSpacing.json gives this character, e.g. less for a
+    // comma, which would otherwise tear a hole into the text
+    int rule = spacingRules.SpacingFor(codepoint);
+
+    return rule < 0 ? advance : std::max(rule - narrower, 1);
 }
 
 int FontRenderer::Measure(const std::string &text, TextSpacing spacing, int scale) const {
@@ -118,6 +148,12 @@ std::string FontRenderer::Encode(int codepoint) {
     return "";
 }
 
+int FontRenderer::FirstCodepoint(const std::string &text) {
+    std::size_t index = 0;
+
+    return text.empty() ? 0 : NextGlyph(text, index);
+}
+
 std::size_t FontRenderer::GlyphCount(const std::string &text) {
     std::size_t count = 0;
 
@@ -174,9 +210,10 @@ bool FontRenderer::IsIcon(int codepoint) {
 }
 
 FontRenderer::Cell FontRenderer::CellFor(int codepoint) {
-    // The atlas only knows capital letters
+    // Both rows hold the letters in the same order, so a small letter sits in
+    // the same column as its capital
     if (codepoint >= 'a' && codepoint <= 'z') {
-        codepoint = codepoint - 'a' + 'A';
+        return {codepoint - 'a', LOWER_GROUP, true};
     }
 
     if (codepoint >= 'A' && codepoint <= 'Z') {
@@ -194,65 +231,95 @@ FontRenderer::Cell FontRenderer::CellFor(int codepoint) {
     }
 
     switch (codepoint) {
-        // After the Z: Ae, Ue, Oe and sz
+        // After the Z: Ae, Ue, Oe and sz, in both rows
         case 0xC4:
-        case 0xE4:
             return {26, LETTER_GROUP, true};
+        case 0xE4:
+            return {26, LOWER_GROUP, true};
         case 0xDC:
-        case 0xFC:
             return {27, LETTER_GROUP, true};
+        case 0xFC:
+            return {27, LOWER_GROUP, true};
         case 0xD6:
-        case 0xF6:
             return {28, LETTER_GROUP, true};
+        case 0xF6:
+            return {28, LOWER_GROUP, true};
         case 0xDF:
-            return {29, LETTER_GROUP, true};
+            return {29, LOWER_GROUP, true};
 
+        // The digit row: the numbers, then what a calculation and a line of
+        // code are written with, and the four arrows at its end
         case '0':
             return {9, DIGIT_GROUP, true};
-        case ',':
+        case '#':
             return {10, DIGIT_GROUP, true};
-        case '.':
-            return {11, DIGIT_GROUP, true};
-        case ':':
-            return {12, DIGIT_GROUP, true};
-        case '"':
-            return {13, DIGIT_GROUP, true};
-        case '?':
-            return {14, DIGIT_GROUP, true};
-        case '!':
-            return {15, DIGIT_GROUP, true};
         case '+':
-            return {16, DIGIT_GROUP, true};
+            return {11, DIGIT_GROUP, true};
         case '-':
-            return {17, DIGIT_GROUP, true};
+            return {12, DIGIT_GROUP, true};
         case '*':
-            return {18, DIGIT_GROUP, true};
+            return {13, DIGIT_GROUP, true};
         case '/':
-            return {19, DIGIT_GROUP, true};
+            return {14, DIGIT_GROUP, true};
         case '%':
-            return {20, DIGIT_GROUP, true};
+            return {15, DIGIT_GROUP, true};
         case '=':
-            return {21, DIGIT_GROUP, true};
-        case '_':
-            return {22, DIGIT_GROUP, true};
+            return {16, DIGIT_GROUP, true};
         case '&':
-            return {23, DIGIT_GROUP, true};
-        case '(':
-            return {24, DIGIT_GROUP, true};
-        case ')':
-            return {25, DIGIT_GROUP, true};
-        case '[':
-            return {26, DIGIT_GROUP, true};
-        case ']':
-            return {27, DIGIT_GROUP, true};
+            return {17, DIGIT_GROUP, true};
+        case '?':
+            return {18, DIGIT_GROUP, true};
+        case '!':
+            return {19, DIGIT_GROUP, true};
+        case '_':
+            return {20, DIGIT_GROUP, true};
         case ARROW_LEFT:
-            return {28, DIGIT_GROUP, true};
+            return {21, DIGIT_GROUP, true};
         case ARROW_RIGHT:
-            return {29, DIGIT_GROUP, true};
+            return {22, DIGIT_GROUP, true};
         case ARROW_UP:
-            return {30, DIGIT_GROUP, true};
+            return {23, DIGIT_GROUP, true};
         case ARROW_DOWN:
-            return {31, DIGIT_GROUP, true};
+            return {24, DIGIT_GROUP, true};
+
+        // The characters with a width of their own, see fontSpacing.json:
+        // they share one row, in this order
+        case ',':
+            return {0, SPECIAL_GROUP, true};
+        case '.':
+            return {1, SPECIAL_GROUP, true};
+        case ':':
+            return {2, SPECIAL_GROUP, true};
+        case ';':
+            return {3, SPECIAL_GROUP, true};
+        case '\'':
+            return {4, SPECIAL_GROUP, true};
+        case '"':
+            return {5, SPECIAL_GROUP, true};
+        case '(':
+            return {6, SPECIAL_GROUP, true};
+        case ')':
+            return {7, SPECIAL_GROUP, true};
+        case '[':
+            return {8, SPECIAL_GROUP, true};
+        case ']':
+            return {9, SPECIAL_GROUP, true};
+        case '{':
+            return {10, SPECIAL_GROUP, true};
+        case '}':
+            return {11, SPECIAL_GROUP, true};
+        case '<':
+            return {12, SPECIAL_GROUP, true};
+        case '>':
+            return {13, SPECIAL_GROUP, true};
+        case '\\':
+            return {14, SPECIAL_GROUP, true};
+        case '|':
+            return {15, SPECIAL_GROUP, true};
+        case '~':
+            return {16, SPECIAL_GROUP, true};
+        case '^':
+            return {17, SPECIAL_GROUP, true};
 
         default:
             // Everything else, including the space, only advances
@@ -262,7 +329,23 @@ FontRenderer::Cell FontRenderer::CellFor(int codepoint) {
 
 int FontRenderer::RowFor(const Cell &cell, int variant) const {
     if (cell.group != ICON_GROUP) {
-        return cell.group * variantCount + variant;
+        int group = cell.group;
+
+        if (group >= colouredGroups) {
+            // An atlas without lowercase letters draws capitals instead: both
+            // rows hold the letters in the same order. Its digits sit in the
+            // group before the icons. Special characters it does not have at
+            // all, so they stay empty.
+            if (group == LOWER_GROUP) {
+                group = LETTER_GROUP;
+            } else if (group == DIGIT_GROUP) {
+                group = colouredGroups - 1;
+            } else {
+                return -1;
+            }
+        }
+
+        return group * variantCount + variant;
     }
 
     // The icon rows are white, grey and yellow. All other colors draw white.
@@ -278,7 +361,7 @@ int FontRenderer::RowFor(const Cell &cell, int variant) const {
         iconRow = 0;
     }
 
-    return iconVariantCount > 0 ? 2 * variantCount + iconRow : -1;
+    return iconVariantCount > 0 ? colouredGroups * variantCount + iconRow : -1;
 }
 
 void FontRenderer::Draw(const std::string &text,

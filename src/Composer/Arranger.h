@@ -33,12 +33,12 @@ class Arranger {
 public:
     // Height of a channel row and width of a bar. A row is as high as one in
     // the channel list, so both read as the same thing.
-    static constexpr float ROW_HEIGHT = 14.0f;
+    static constexpr float ROW_HEIGHT = 18.0f;
     static constexpr float BAR_WIDTH = 22.0f;
 
     // Width of the names on the left and height of the ruler above
     static constexpr float NAMES_WIDTH = 70.0f;
-    static constexpr float RULER_HEIGHT = 9.0f;
+    static constexpr float RULER_HEIGHT = 13.0f;
 
     // Nothing was asked for
     static constexpr int NOTHING = -1;

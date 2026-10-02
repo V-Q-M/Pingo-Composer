@@ -42,11 +42,11 @@ class PianoRoll {
 public:
     // Width of the keys on the left and height of the ruler at the top
     static constexpr float KEYS_WIDTH = 25.0f;
-    static constexpr float RULER_HEIGHT = 9.0f;
+    static constexpr float RULER_HEIGHT = 13.0f;
 
     // Height of one half step and the width of one step, in pixels. A row is
     // as high as a letter, so the names of the keys fit into it.
-    static constexpr float PITCH_HEIGHT = 8.0f;
+    static constexpr float PITCH_HEIGHT = 12.0f;
 
     static constexpr float MIN_STEP_WIDTH = 3.0f;
     static constexpr float MAX_STEP_WIDTH = 24.0f;

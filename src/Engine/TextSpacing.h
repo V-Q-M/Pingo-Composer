@@ -2,10 +2,10 @@
 
 // Spacing between two characters when drawing
 enum class TextSpacing {
-    // Full cell width. The empty border columns of two neighboring cells add up
-    // to two pixels of space.
+    // One column less than the cell is wide, so one pixel of space between
+    // two letters
     Normal,
 
-    // One column narrower, so only one pixel of space
+    // One column narrower still, the letters almost touch
     Narrow
 };

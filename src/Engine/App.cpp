@@ -15,6 +15,8 @@ App::App(AppOptions options)
       window(this->options.windowWidth, this->options.windowHeight, this->options.title),
       screen(this->options.scale),
       font(textures.Get(this->options.font), this->options.letterWidth, this->options.letterHeight) {
+    // How much room every character takes, from assets/fontSpacing.json
+    font.SetSpacing(FontSpacing::Load());
 }
 
 void App::Run() {

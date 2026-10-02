@@ -1,5 +1,6 @@
 #include "StudioView.h"
 
+#include <cctype>
 #include <cmath>
 
 #include "MidiFile.h"
@@ -10,8 +11,8 @@
 
 // Heights of the bars and the width of the channel list, in canvas pixels.
 // The transport holds two rows: the files above, the playing below.
-constexpr float TRANSPORT_HEIGHT = 31.0f;
-constexpr float STATUS_HEIGHT = 11.0f;
+constexpr float TRANSPORT_HEIGHT = 39.0f;
+constexpr float STATUS_HEIGHT = 15.0f;
 constexpr float CHANNEL_WIDTH = 104.0f;
 
 constexpr float GAP = 3.0f;
@@ -34,11 +35,11 @@ StudioView::StudioView(App &app)
         channels.push_back(std::move(channel));
     };
 
-    add("PULSE 1", Color{0, 249, 255, 255}, Synth::Wave::Square);
-    add("PULSE 2", Color{61, 255, 20, 255}, Synth::Wave::Pulse);
-    add("TRIANGLE", Color{255, 229, 26, 255}, Synth::Wave::Triangle);
-    add("NOISE", Color{188, 190, 202, 255}, Synth::Wave::Noise);
-    add("SAMPLE", Color{255, 108, 34, 255}, Synth::Wave::Square);
+    add("Pulse 1", Color{0, 249, 255, 255}, Synth::Wave::Square);
+    add("Pulse 2", Color{61, 255, 20, 255}, Synth::Wave::Pulse);
+    add("Triangle", Color{255, 229, 26, 255}, Synth::Wave::Triangle);
+    add("Noise", Color{188, 190, 202, 255}, Synth::Wave::Noise);
+    add("Sample", Color{255, 108, 34, 255}, Synth::Wave::Square);
 }
 
 // The name of a file without its folders, for the title
@@ -59,7 +60,7 @@ void StudioView::Save() {
 
     bool written = SongFile::Save(songFile, channels, tempo);
 
-    report = written ? "SAVED " + NameOf(songFile) : "COULD NOT SAVE";
+    report = written ? "Saved " + NameOf(songFile) : "Could not save";
 
     if (!written) {
         songFile.clear();
@@ -94,7 +95,7 @@ void StudioView::Open() {
     bool read = midi ? MidiFile::Load(file, channels, tempo) : SongFile::Load(file, channels, tempo);
 
     if (!read) {
-        report = "COULD NOT OPEN " + NameOf(file);
+        report = "Could not open " + NameOf(file);
         return;
     }
 
@@ -103,7 +104,7 @@ void StudioView::Open() {
 
     AfterLoading();
 
-    report = (midi ? "IMPORTED " : "OPENED ") + NameOf(file);
+    report = (midi ? "Imported " : "Opened ") + NameOf(file);
 }
 
 // Everything that pointed into the old song starts over
@@ -141,7 +142,7 @@ void StudioView::Export() {
 
     bool written = SongExport::Write(file, events, used, tempo);
 
-    report = written ? "SAVED " + std::to_string(events.size()) + " NOTES" : "NOTHING TO SAVE";
+    report = written ? "Saved " + std::to_string(events.size()) + " notes" : "Nothing to save";
 }
 
 Pattern &StudioView::CurrentPattern() {
@@ -336,7 +337,7 @@ void StudioView::DrawArrangement(Ui &ui, Rectangle bounds) {
 
     float row = Widgets::RowHeight(ui.font);
 
-    Widgets::Label(ui, {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING}, "ARRANGEMENT",
+    Widgets::Label(ui, {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING}, "Arrangement",
                    ui.theme.mutedVariant);
 
     Rectangle area{bounds.x + 1.0f, bounds.y + row, bounds.width - 2.0f, bounds.height - row - 1.0f};
@@ -373,16 +374,16 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
 
     // Everything about files stands together at the left end: opening,
     // exporting and saving
-    float openWidth = Widgets::RowWidth(font, "OPEN");
-    float exportWidth = Widgets::RowWidth(font, "EXPORT");
+    float openWidth = Widgets::RowWidth(font, "Open");
+    float exportWidth = Widgets::RowWidth(font, "Export");
 
-    if (Widgets::Button(ui, {x, files, openWidth, row}, "OPEN")) {
+    if (Widgets::Button(ui, {x, files, openWidth, row}, "Open")) {
         Open();
     }
 
     x += openWidth + 2.0f;
 
-    if (Widgets::Button(ui, {x, files, exportWidth, row}, "EXPORT")) {
+    if (Widgets::Button(ui, {x, files, exportWidth, row}, "Export")) {
         Export();
     }
 
@@ -435,7 +436,7 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
 
     // The name of the song at the right end of the upper row, cyan like the
     // titles of the engine
-    std::string title = songFile.empty() ? "UNTITLED SONG" : NameOf(songFile);
+    std::string title = songFile.empty() ? "Untitled song" : NameOf(songFile);
 
     Widgets::Label(
         ui,
@@ -453,7 +454,7 @@ void StudioView::DrawChannels(Ui &ui, Rectangle bounds) {
     float row = Widgets::RowHeight(font);
     float mute = row;
 
-    Widgets::Label(ui, {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING}, "CHANNELS", ui.theme.mutedVariant);
+    Widgets::Label(ui, {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING}, "Channels", ui.theme.mutedVariant);
 
     float y = bounds.y + row + 1.0f;
 
@@ -517,7 +518,7 @@ void StudioView::DrawInstrument(Ui &ui, Rectangle bounds) {
 
     float row = Widgets::RowHeight(ui.font);
 
-    Widgets::Label(ui, {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING}, "INSTRUMENT",
+    Widgets::Label(ui, {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING}, "Instrument",
                    ui.theme.mutedVariant);
 
     float y = bounds.y + row + 1.0f;
@@ -546,8 +547,13 @@ void StudioView::DrawInstrument(Ui &ui, Rectangle bounds) {
         return std::to_string(static_cast<int>(std::round(share * 100.0f)));
     };
 
-    // The wave, by its name
-    if (int turn = Widgets::Stepper(ui, place(), "", Synth::WaveName(instrument.wave)); turn != 0) {
+    // The wave, by its name. The name is the key in song files, so only the
+    // text on the screen gets a capital.
+    std::string waveName = Synth::WaveName(instrument.wave);
+
+    waveName[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(waveName[0])));
+
+    if (int turn = Widgets::Stepper(ui, place(), "", waveName); turn != 0) {
         const auto &waves = Synth::WAVES;
 
         std::size_t at = 0;
@@ -564,31 +570,31 @@ void StudioView::DrawInstrument(Ui &ui, Rectangle bounds) {
         synth.Play(69, instrument, 0.25f);
     }
 
-    if (int turn = Widgets::Stepper(ui, place(), "VOL", percent(instrument.volume)); turn != 0) {
+    if (int turn = Widgets::Stepper(ui, place(), "Vol", percent(instrument.volume)); turn != 0) {
         instrument.volume = std::clamp(instrument.volume + static_cast<float>(turn) * 0.05f, 0.0f, 1.0f);
     }
 
-    if (int turn = Widgets::Stepper(ui, place(), "ATT", millis(instrument.attack)); turn != 0) {
+    if (int turn = Widgets::Stepper(ui, place(), "Att", millis(instrument.attack)); turn != 0) {
         instrument.attack = nudge(instrument.attack, turn);
     }
 
-    if (int turn = Widgets::Stepper(ui, place(), "DEC", millis(instrument.decay)); turn != 0) {
+    if (int turn = Widgets::Stepper(ui, place(), "Dec", millis(instrument.decay)); turn != 0) {
         instrument.decay = nudge(instrument.decay, turn);
     }
 
-    if (int turn = Widgets::Stepper(ui, place(), "SUS", percent(instrument.sustain)); turn != 0) {
+    if (int turn = Widgets::Stepper(ui, place(), "Sus", percent(instrument.sustain)); turn != 0) {
         instrument.sustain = std::clamp(instrument.sustain + static_cast<float>(turn) * 0.1f, 0.0f, 1.0f);
     }
 
-    if (int turn = Widgets::Stepper(ui, place(), "REL", millis(instrument.release)); turn != 0) {
+    if (int turn = Widgets::Stepper(ui, place(), "Rel", millis(instrument.release)); turn != 0) {
         instrument.release = nudge(instrument.release, turn);
     }
 
-    if (int turn = Widgets::Stepper(ui, place(), "VIB", percent(instrument.vibrato)); turn != 0) {
+    if (int turn = Widgets::Stepper(ui, place(), "Vib", percent(instrument.vibrato)); turn != 0) {
         instrument.vibrato = std::clamp(instrument.vibrato + static_cast<float>(turn) * 0.05f, 0.0f, 2.0f);
     }
 
-    if (int turn = Widgets::Stepper(ui, place(), "SWP", std::to_string(static_cast<int>(instrument.sweep)));
+    if (int turn = Widgets::Stepper(ui, place(), "Swp", std::to_string(static_cast<int>(instrument.sweep)));
         turn != 0) {
         instrument.sweep = std::clamp(instrument.sweep + static_cast<float>(turn) * 4.0f, -240.0f, 240.0f);
     }
@@ -608,13 +614,13 @@ void StudioView::DrawPattern(Ui &ui, Rectangle bounds) {
     Widgets::Label(
         ui,
         {bounds.x + Widgets::PADDING, bounds.y + Widgets::PADDING},
-        channel.muted ? title + "  MUTED" : title,
+        channel.muted ? title + "  Muted" : title,
         ui.theme.mutedVariant
     );
 
     // How many notes are in it, so an empty pattern is obvious
     std::size_t notes = pattern.Notes().size();
-    std::string count = std::to_string(notes) + (notes == 1 ? " NOTE" : " NOTES");
+    std::string count = std::to_string(notes) + (notes == 1 ? " note" : " notes");
 
     Widgets::Label(
         ui,
@@ -647,12 +653,12 @@ void StudioView::DrawPattern(Ui &ui, Rectangle bounds) {
 void StudioView::DrawStatus(Ui &ui, Rectangle bounds) {
     Widgets::Bar(ui, bounds);
 
-    std::string state = playing ? "PLAYING" : "STOPPED";
+    std::string state = playing ? "Playing" : "Stopped";
     std::string bar = std::to_string(static_cast<int>(position) / Pattern::BEATS_PER_BAR + 1);
     std::string beat = std::to_string(static_cast<int>(position) % Pattern::BEATS_PER_BAR + 1);
 
     // After saving its answer stands here instead of the place in the song
-    std::string left = report.empty() ? state + "  BAR " + bar + "." + beat : report;
+    std::string left = report.empty() ? state + "  Bar " + bar + "." + beat : report;
 
     Widgets::Label(
         ui,
@@ -662,8 +668,8 @@ void StudioView::DrawStatus(Ui &ui, Rectangle bounds) {
     );
 
     std::string keys = rollOpen
-                           ? "DRAG DRAW   CTRL PICK   CTRL C V COPY   BACKSPACE DELETE"
-                           : "DRAG BLOCKS   WHEEL PATTERN   CTRL C V COPY   CTRL S SAVE";
+                           ? "Drag draw   Ctrl pick   Ctrl C V copy   Backspace delete"
+                           : "Drag blocks   Wheel pattern   Ctrl C V copy   Ctrl S save";
 
     Widgets::Label(
         ui,
