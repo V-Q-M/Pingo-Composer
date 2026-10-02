@@ -55,8 +55,8 @@ public:
                           const std::vector<std::string> &names,
                           int tempo);
 
-    // Writes by the ending of the name: ".mid" gives notes, everything else
-    // the sound
+    // Writes by the ending of the name: ".mid" (in any case) gives notes,
+    // everything else the sound
     static bool Write(const std::string &file,
                       const std::vector<Event> &events,
                       const std::vector<Channel> &channels,

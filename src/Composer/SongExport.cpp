@@ -6,6 +6,8 @@
 
 #include "raylib.h"
 
+#include "MidiFile.h"
+
 // Silence behind the last note, so nothing is cut off while it fades out
 constexpr int TAIL_SECONDS = 1;
 
@@ -273,9 +275,7 @@ bool SongExport::Write(const std::string &file,
         return false;
     }
 
-    bool midi = file.size() > 4 && file.compare(file.size() - 4, 4, ".mid") == 0;
-
-    if (midi) {
+    if (MidiFile::HasExtension(file)) {
         std::vector<std::string> names;
 
         for (const Channel &channel: channels) {

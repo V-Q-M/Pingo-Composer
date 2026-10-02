@@ -17,6 +17,9 @@ public:
     // What such a file is called
     static constexpr const char *EXTENSION = "mid";
 
+    // Does the name end in ".mid", in any case? Other programs write ".MID".
+    static bool HasExtension(const std::string &file);
+
     // Reads the file into channels, and the tempo if the file names one.
     // false if it is missing or not a midi file, and then nothing is changed.
     static bool Load(const std::string &file, std::vector<Channel> &channels, int &tempo);

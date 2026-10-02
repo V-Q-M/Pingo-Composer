@@ -1,6 +1,8 @@
 #include "MidiFile.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <map>
@@ -101,6 +103,20 @@ struct Sounding {
     int tick = 0;
     int velocity = 100;
 };
+
+bool MidiFile::HasExtension(const std::string &file) {
+    const std::string ending = std::string(".") + EXTENSION;
+
+    // A name that is only the ending has no name in front of it
+    if (file.size() <= ending.size()) {
+        return false;
+    }
+
+    return std::equal(ending.begin(), ending.end(), file.end() - static_cast<std::ptrdiff_t>(ending.size()),
+                      [](char wanted, char found) {
+                          return wanted == std::tolower(static_cast<unsigned char>(found));
+                      });
+}
 
 bool MidiFile::Load(const std::string &file, std::vector<Channel> &channels, int &tempo) {
     std::vector<std::uint8_t> bytes = ReadBytes(file);

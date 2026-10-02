@@ -92,7 +92,7 @@ void StudioView::Open() {
         return;
     }
 
-    bool midi = file.size() > 4 && file.compare(file.size() - 4, 4, ".mid") == 0;
+    bool midi = MidiFile::HasExtension(file);
     bool read = midi ? MidiFile::Load(file, channels, tempo) : SongFile::Load(file, channels, tempo);
 
     if (!read) {
