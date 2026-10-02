@@ -249,6 +249,13 @@ void StudioView::RestartPlayback() {
     synth.StopAll();
 }
 
+void StudioView::TogglePlayback() {
+    playing = !playing;
+
+    // Starting listens from here on, stopping lets nothing ring on
+    RestartPlayback();
+}
+
 void StudioView::Update(float dt) {
     dt = std::min(dt, LONGEST_FRAME_SECONDS);
 
@@ -277,10 +284,7 @@ void StudioView::Update(float dt) {
 
     // Space starts and stops, like in every other program
     if (IsKeyPressed(KEY_SPACE)) {
-        playing = !playing;
-
-        // Starting listens from here on, stopping lets nothing ring on
-        RestartPlayback();
+        TogglePlayback();
     }
 
     // Control and S save, like everywhere else
@@ -428,7 +432,7 @@ void StudioView::DrawTransport(Ui &ui, Rectangle bounds) {
     std::string play(1, playing ? FontRenderer::ICON_PAUSE : FontRenderer::ICON_PLAY);
 
     if (Widgets::Button(ui, {x, y, row, row}, play)) {
-        playing = !playing;
+        TogglePlayback();
     }
 
     x += row + 2.0f;

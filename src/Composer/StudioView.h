@@ -68,6 +68,9 @@ private:
     // Starts every note the playhead has reached since the last frame
     void PlayReachedNotes();
 
+    // Space and the play button: starts the song, or stops it
+    void TogglePlayback();
+
     // Starts listening again from where the playhead stands, e.g. after a
     // jump. The note right under it belongs to the new place and sounds.
     void RestartPlayback();
