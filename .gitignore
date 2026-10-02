@@ -7,3 +7,7 @@ build/
 
 # Backlog and its copy, local only
 log/
+
+# Markdown files, e.g. notes, CLAUDE.md and INDEX.md
+*.md
+!README.md
