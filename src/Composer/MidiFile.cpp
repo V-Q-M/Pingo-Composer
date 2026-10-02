@@ -267,21 +267,33 @@ bool MidiFile::Load(const std::string &file, std::vector<Channel> &channels, int
         std::map<int, std::size_t> bars;
 
         for (const Note &note: track.notes) {
-            int bar = note.step / stepsPerBar;
+            int step = note.step;
+            int left = note.length;
 
-            if (bar >= Channel::BARS) {
-                continue;
+            // A note that rings over a barline is cut there and goes on in the
+            // next bar. A pattern longer than a bar would swallow the block
+            // behind it, see Channel::Tidy, and with it every note of that bar.
+            while (left > 0) {
+                int bar = step / stepsPerBar;
+
+                if (bar >= Channel::BARS) {
+                    break;
+                }
+
+                if (bars.find(bar) == bars.end()) {
+                    bars[bar] = channel.patterns.size();
+                    channel.patterns.push_back(Pattern{});
+                }
+
+                Note inside = note;
+                inside.step = step % stepsPerBar;
+                inside.length = std::min(left, stepsPerBar - inside.step);
+
+                channel.patterns[bars[bar]].Add(inside);
+
+                step += inside.length;
+                left -= inside.length;
             }
-
-            if (bars.find(bar) == bars.end()) {
-                bars[bar] = channel.patterns.size();
-                channel.patterns.push_back(Pattern{});
-            }
-
-            Note inside = note;
-            inside.step = note.step % stepsPerBar;
-
-            channel.patterns[bars[bar]].Add(inside);
         }
 
         if (channel.patterns.empty()) {
