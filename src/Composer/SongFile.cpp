@@ -1,6 +1,7 @@
 #include "SongFile.h"
 
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 
 #include <nlohmann/json.hpp>
@@ -103,15 +104,40 @@ bool SongFile::Save(const std::string &file, const std::vector<Channel> &channel
 
     song["channels"] = written;
 
-    std::ofstream out(file);
+    // Written next to the song and moved over it when it is complete: a song
+    // that cannot be written to the end (full disk, broken path) leaves the old
+    // file as it was, instead of an empty one
+    std::string temporary = file + ".tmp";
 
-    if (!out) {
+    {
+        std::ofstream out(temporary);
+
+        if (!out) {
+            return false;
+        }
+
+        out << song.dump(2) << "\n";
+        out.flush();
+
+        if (!out.good()) {
+            out.close();
+            std::remove(temporary.c_str());
+
+            return false;
+        }
+    }
+
+    std::error_code error;
+
+    std::filesystem::rename(temporary, file, error);
+
+    if (error) {
+        std::filesystem::remove(temporary, error);
+
         return false;
     }
 
-    out << song.dump(2) << "\n";
-
-    return out.good();
+    return true;
 }
 
 // One channel as written by Save. Missing keys take what a new channel has, and
