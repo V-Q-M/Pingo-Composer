@@ -114,6 +114,62 @@ bool SongFile::Save(const std::string &file, const std::vector<Channel> &channel
     return out.good();
 }
 
+// One channel as written by Save. Missing keys take what a new channel has, and
+// a value of the wrong type makes json throw, see Load.
+static Channel ReadChannel(const json &entry) {
+    Channel channel;
+
+    channel.name = entry.value("name", std::string("Channel"));
+    Synth::Instrument &instrument = channel.instrument;
+
+    instrument.wave = Synth::WaveFromName(entry.value("wave", std::string("square")));
+
+    // Everything else is what an instrument starts with, so a file that
+    // only knows the wave still sounds right
+    json sound = entry.value("instrument", json::object());
+
+    instrument.volume = sound.value("volume", instrument.volume);
+    instrument.attack = sound.value("attack", instrument.attack);
+    instrument.decay = sound.value("decay", instrument.decay);
+    instrument.sustain = sound.value("sustain", instrument.sustain);
+    instrument.release = sound.value("release", instrument.release);
+    instrument.vibrato = sound.value("vibrato", instrument.vibrato);
+    instrument.vibratoHertz = sound.value("vibratoHertz", instrument.vibratoHertz);
+    instrument.sweep = sound.value("sweep", instrument.sweep);
+    channel.colour = FromHex(entry.value("colour", std::string()), Color{255, 255, 255, 255});
+    channel.muted = entry.value("muted", false);
+
+    channel.patterns.clear();
+
+    for (const json &written: entry.value("patterns", json::array())) {
+        Pattern pattern;
+
+        for (const json &note: written.value("notes", json::array())) {
+            Note read;
+
+            read.step = note.value("step", 0);
+            read.length = note.value("length", 1);
+            read.pitch = note.value("pitch", 60);
+            read.velocity = note.value("velocity", 100);
+
+            pattern.Add(read);
+        }
+
+        channel.patterns.push_back(std::move(pattern));
+    }
+
+    // A channel always has at least one pattern to write into
+    if (channel.patterns.empty()) {
+        channel.patterns.push_back(Pattern{});
+    }
+
+    for (const json &block: entry.value("blocks", json::array())) {
+        channel.Set(block.value("bar", -1), block.value("pattern", Channel::EMPTY));
+    }
+
+    return channel;
+}
+
 bool SongFile::Load(const std::string &file, std::vector<Channel> &channels, int &tempo) {
     std::ifstream in(file);
 
@@ -127,68 +183,27 @@ bool SongFile::Load(const std::string &file, std::vector<Channel> &channels, int
         return false;
     }
 
-    std::vector<Channel> read;
+    // A file written or edited by hand may hold a value of the wrong type, e.g.
+    // a text where a number belongs. That makes json throw, and it must not
+    // take the program down: the file is simply not read, and nothing changes.
+    try {
+        std::vector<Channel> read;
 
-    for (const json &entry: song["channels"]) {
-        Channel channel;
-
-        channel.name = entry.value("name", std::string("Channel"));
-        Synth::Instrument &instrument = channel.instrument;
-
-        instrument.wave = Synth::WaveFromName(entry.value("wave", std::string("square")));
-
-        // Everything else is what an instrument starts with, so a file that
-        // only knows the wave still sounds right
-        json sound = entry.value("instrument", json::object());
-
-        instrument.volume = sound.value("volume", instrument.volume);
-        instrument.attack = sound.value("attack", instrument.attack);
-        instrument.decay = sound.value("decay", instrument.decay);
-        instrument.sustain = sound.value("sustain", instrument.sustain);
-        instrument.release = sound.value("release", instrument.release);
-        instrument.vibrato = sound.value("vibrato", instrument.vibrato);
-        instrument.vibratoHertz = sound.value("vibratoHertz", instrument.vibratoHertz);
-        instrument.sweep = sound.value("sweep", instrument.sweep);
-        channel.colour = FromHex(entry.value("colour", std::string()), Color{255, 255, 255, 255});
-        channel.muted = entry.value("muted", false);
-
-        channel.patterns.clear();
-
-        for (const json &written: entry.value("patterns", json::array())) {
-            Pattern pattern;
-
-            for (const json &note: written.value("notes", json::array())) {
-                Note read;
-
-                read.step = note.value("step", 0);
-                read.length = note.value("length", 1);
-                read.pitch = note.value("pitch", 60);
-                read.velocity = note.value("velocity", 100);
-
-                pattern.Add(read);
-            }
-
-            channel.patterns.push_back(std::move(pattern));
+        for (const json &entry: song["channels"]) {
+            read.push_back(ReadChannel(entry));
         }
 
-        // A channel always has at least one pattern to write into
-        if (channel.patterns.empty()) {
-            channel.patterns.push_back(Pattern{});
+        int readTempo = song.value("tempo", tempo);
+
+        if (read.empty()) {
+            return false;
         }
 
-        for (const json &block: entry.value("blocks", json::array())) {
-            channel.Set(block.value("bar", -1), block.value("pattern", Channel::EMPTY));
-        }
+        channels = std::move(read);
+        tempo = readTempo;
 
-        read.push_back(std::move(channel));
-    }
-
-    if (read.empty()) {
+        return true;
+    } catch (const json::exception &) {
         return false;
     }
-
-    channels = std::move(read);
-    tempo = song.value("tempo", tempo);
-
-    return true;
 }
