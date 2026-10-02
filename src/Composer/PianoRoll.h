@@ -65,6 +65,11 @@ public:
     // colour is the colour of the channel the pattern belongs to.
     void Draw(Ui &ui, Rectangle bounds, Pattern &pattern, Color colour, NoteClipboard &clipboard);
 
+    // Forgets the chosen notes and a drag that is going on. The view calls it
+    // when the roll shows another pattern: note ids belong to one pattern, so
+    // a selection would reach other notes there.
+    void Reset();
+
     // Where the song stands, in beats. The roll draws the line and scrolls
     // along while it is playing.
     void SetPlayhead(float beats, bool following);

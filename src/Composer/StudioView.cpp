@@ -123,6 +123,9 @@ void StudioView::AfterLoading() {
     current = 0;
     currentPattern = 0;
     rollOpen = false;
+
+    roll.Reset();
+    arranger.Reset();
     playing = false;
     position = 0.0f;
 
@@ -378,6 +381,8 @@ void StudioView::DrawArrangement(Ui &ui, Rectangle bounds) {
 
     // A double click on a block opens its pattern in the roll
     if (arranger.OpenedChannel() != Arranger::NOTHING) {
+        roll.Reset();
+
         current = static_cast<std::size_t>(arranger.OpenedChannel());
         currentPattern = channels[current].bars[static_cast<std::size_t>(arranger.OpenedBar())];
         rollOpen = true;
@@ -515,10 +520,16 @@ void StudioView::DrawChannels(Ui &ui, Rectangle bounds) {
             // A single click shows this channel, a double click opens the roll
             // and closes it again. The first of the two clicks has already
             // switched the channel, so the second one only switches the roll.
+            if (current != i) {
+                roll.Reset();
+            }
+
             current = i;
 
             if (ui.doubleClicked) {
                 rollOpen = !rollOpen;
+
+                roll.Reset();
             }
         }
 

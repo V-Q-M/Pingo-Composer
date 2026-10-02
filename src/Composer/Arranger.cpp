@@ -331,6 +331,14 @@ void Arranger::HandleClipboard(Ui &ui, const Grid &grid, std::vector<Channel> &c
     }
 }
 
+void Arranger::Reset() {
+    chosen.clear();
+    lastPattern.clear();
+
+    turned = 0.0f;
+    turning = Block{NOTHING, NOTHING};
+}
+
 void Arranger::HandleMouse(Ui &ui, const Grid &grid, std::vector<Channel> &channels) {
     bool inside = Widgets::Hovered(ui, grid.area);
 

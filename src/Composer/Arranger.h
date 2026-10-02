@@ -57,6 +57,11 @@ public:
     // The bar that was double clicked, so the view can open its pattern
     int OpenedBar() const;
 
+    // Forgets the picked blocks and the patterns the channels were painted with.
+    // The view calls it when another song was opened: the blocks are named by
+    // their place, so they would point at whatever stands there now.
+    void Reset();
+
     // Beats the mouse asked for by clicking into the ruler, -1 for none
     float ScrubbedBeats() const;
 

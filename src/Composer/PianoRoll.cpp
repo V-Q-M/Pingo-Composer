@@ -526,6 +526,16 @@ void PianoRoll::Choose(int id) {
     }
 }
 
+void PianoRoll::Reset() {
+    chosen.clear();
+    before.clear();
+
+    drag = Drag::None;
+    dragNote = Pattern::NONE;
+    createMoved = false;
+    litPitch = 0;
+}
+
 void PianoRoll::ChooseNone() {
     chosen.clear();
 }
