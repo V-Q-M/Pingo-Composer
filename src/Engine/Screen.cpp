@@ -1,4 +1,5 @@
 #include "Screen.h"
+#include <cmath>
 
 #include <algorithm>
 
