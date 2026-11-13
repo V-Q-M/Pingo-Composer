@@ -11,3 +11,6 @@ log/
 # Markdown files, e.g. notes, CLAUDE.md and INDEX.md
 *.md
 !README.md
+
+# Cargo
+target/

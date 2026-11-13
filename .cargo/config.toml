@@ -1,0 +1,6 @@
+# PingoCore is a private GitHub repository: let cargo fetch it with the git
+# command line, which uses your SSH key (cargo's built-in git client doesn't).
+[net]
+git-fetch-with-cli = true
+
+

@@ -18,7 +18,26 @@ hear it played by a small sound chip. It is the music companion of
 - **Export** the whole song, or only the open pattern, as sound (`.wav`) or as notes (`.mid`).
 - Two songs to start from in `template/`: the tetris tune and a battle song.
 
-## Getting started
+## Rust version (branch `rust`)
+
+The composer is being rewritten in Rust on [PingoCore](https://github.com/V-Q-M/PingoCore)'s `pingo-gui`, the
+raylib frontend all Pingo apps share. The first iteration has the screens: transport, channels, instrument,
+arrangement and piano roll can be looked at and walked through; nothing sounds and no notes are written yet.
+
+```
+crates/compose-core   the song: channels, patterns, instruments (no UI)
+crates/compose-gui    the window (binary `pingo-compose`)
+```
+
+```bash
+cargo run --release                     # needs CMake, clang and the X11/GL development files (raylib builds from source)
+cargo test                              # draws the screens headless; PINGO_SHOTS=dir also saves them as PNGs
+```
+
+PingoCore is fetched over SSH (`.cargo/config.toml`). To work on both at once with `../PingoCore` checked out, add a
+`[patch]` table there as PingoCore's `docs/EMBEDDING.md` describes, and leave it out of commits.
+
+## Getting started (C++)
 
 You need a C++20 compiler, CMake 3.20 or newer, raylib and nlohmann/json.
 

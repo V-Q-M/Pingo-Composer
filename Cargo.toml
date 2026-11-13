@@ -1,0 +1,23 @@
+# Pingo Composer in Rust. Two crates, the layers of PingoCore's FRONTENDS.md:
+#   compose-core  the song: channels, patterns, instruments. No UI.
+#   compose-gui   the window, on pingo-gui (PingoCore).
+# The C++ program in src/ is the reference the port follows; it goes once
+# the Rust one can do everything it does.
+
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+compose-core = { path = "crates/compose-core" }
+# PingoCore is private: the SSH URL, fetched with the git command line (see
+# .cargo/config.toml). The GUI frontend is on PingoCore's `gui` branch until
+# it is released as a tag.
+pingo-gui = { git = "ssh://git@github.com/V-Q-M/PingoCore.git", branch = "gui" }

@@ -1,0 +1,19 @@
+[package]
+name = "compose-gui"
+description = "Pingo Composer: a tiny music tracker with a pixel UI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "pingo-compose"
+path = "src/main.rs"
+
+[dependencies]
+compose-core.workspace = true
+pingo-gui.workspace = true
+
+[dev-dependencies]
+pingo-gui = { workspace = true, features = ["testing"] }

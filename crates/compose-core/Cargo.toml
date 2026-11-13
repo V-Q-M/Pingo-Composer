@@ -1,0 +1,10 @@
+[package]
+name = "compose-core"
+description = "The song of Pingo Composer: channels, patterns, instruments. No UI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
