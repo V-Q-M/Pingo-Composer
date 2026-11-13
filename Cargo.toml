@@ -17,7 +17,5 @@ publish = false
 
 [workspace.dependencies]
 compose-core = { path = "crates/compose-core" }
-# PingoCore is private: the SSH URL, fetched with the git command line (see
-# .cargo/config.toml). The GUI frontend is on PingoCore's `gui` branch until
-# it is released as a tag.
-pingo-gui = { git = "ssh://git@github.com/V-Q-M/PingoCore.git", branch = "gui" }
+# PingoCore is private: the SSH URL, fetched with the git command line (see Pinned to a tag.
+pingo-gui = { git = "ssh://git@github.com/V-Q-M/PingoCore.git", tag = "v0.3.0" }

@@ -191,7 +191,7 @@ dependencies = [
 [[package]]
 name = "pingo-gui"
 version = "0.3.0"
-source = "git+ssh://git@github.com/V-Q-M/PingoCore.git?branch=gui#e20705b36eb6e61f4f5923d9d2da96c6937210d5"
+source = "git+ssh://git@github.com/V-Q-M/PingoCore.git?tag=v0.3.0#e20705b36eb6e61f4f5923d9d2da96c6937210d5"
 dependencies = [
  "pingo-ui",
  "raylib",
@@ -201,7 +201,7 @@ dependencies = [
 [[package]]
 name = "pingo-ui"
 version = "0.3.0"
-source = "git+ssh://git@github.com/V-Q-M/PingoCore.git?branch=gui#e20705b36eb6e61f4f5923d9d2da96c6937210d5"
+source = "git+ssh://git@github.com/V-Q-M/PingoCore.git?tag=v0.3.0#e20705b36eb6e61f4f5923d9d2da96c6937210d5"
 dependencies = [
  "serde",
  "unicode-segmentation",
