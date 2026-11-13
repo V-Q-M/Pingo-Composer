@@ -5,6 +5,7 @@
 
 mod arranger;
 mod colors;
+mod keys;
 mod piano_roll;
 mod studio;
 

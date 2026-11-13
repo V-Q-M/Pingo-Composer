@@ -2,5 +2,3 @@
 # command line, which uses your SSH key (cargo's built-in git client doesn't).
 [net]
 git-fetch-with-cli = true
-
-

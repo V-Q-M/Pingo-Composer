@@ -2,21 +2,35 @@
 //!
 //! The transport bar on top, the channels and the instrument of the chosen
 //! one on the left, the status line at the bottom. In the middle the
-//! arrangement, or the piano roll of a pattern: a double click on a channel
-//! opens and closes it, Esc closes it too.
+//! arrangement, or the piano roll of a pattern.
+//!
+//! Everything works with the mouse and with vim keys (see `keys.rs`): `tab`
+//! walks the panes (a click focuses one too), `j` `k` `gg` `G` and counts
+//! move in every pane, the arrangement and the roll have a cursor cell, `o`
+//! opens the roll and `q` closes it, `?` lists every key, `:` takes commands.
 //!
 //! First iteration: everything can be looked at and walked through, but
 //! nothing sounds and no notes are written. Play runs the playhead silently.
 
 use compose_core::Song;
 use compose_core::pattern::BEATS_PER_BAR;
-use compose_core::song::Setting;
+use compose_core::song::{BARS, Setting};
+use pingo_gui::pingo_ui::components::focus::FocusRing;
+use pingo_gui::pingo_ui::components::help::Help;
+use pingo_gui::pingo_ui::components::list::VimList;
+use pingo_gui::pingo_ui::input::keymap::{Keymap, KeysConfig, Lookup};
+use pingo_gui::pingo_ui::input::vim::{self, Nav};
+use pingo_gui::pingo_ui::input::{CmdAction, CmdLine, Pending, completion};
 use pingo_gui::prelude::*;
 use pingo_gui::ui::PADDING;
-use pingo_gui::widgets::{bar, button, panel, stepper, sunken, toggle};
+use pingo_gui::widgets::help::draw_help;
+use pingo_gui::widgets::hints::{HintStyle, draw_hint_buttons};
+use pingo_gui::widgets::input::{InputStyle, draw_input};
+use pingo_gui::widgets::{Scrollbar, bar, button, panel, stepper, sunken, toggle};
 
 use crate::arranger::Arranger;
 use crate::colors;
+use crate::keys::{self, Action, PANES, Pane};
 use crate::piano_roll::PianoRoll;
 
 /// Heights of the bars and the width of the channel list, in canvas pixels.
@@ -29,6 +43,9 @@ pub const GAP: f32 = 3.0;
 /// How long an answer stays in the status line.
 const REPORT_SECONDS: f32 = 4.0;
 
+/// Names `:` completes.
+const COMMANDS: [&str; 6] = ["help", "play", "quit", "stop", "tempo", "bar"];
+
 /// Where everything sits, worked out from the canvas every frame.
 struct Layout {
     transport: Rect,
@@ -36,6 +53,13 @@ struct Layout {
     instrument: Rect,
     middle: Rect,
     status: Rect,
+}
+
+/// What the keyboard talks to besides the panes.
+enum Mode {
+    Normal,
+    Help(Help),
+    Command,
 }
 
 /// The composer's screen and everything it shows.
@@ -48,9 +72,18 @@ pub struct Studio {
     pub playing: bool,
     /// How far the song has run, in beats.
     pub position: f32,
+    /// The chosen row of the instrument panel.
+    pub setting: usize,
+    pub focus: FocusRing<Pane>,
+    keymap: Keymap<Action>,
+    pending: Pending,
+    mode: Mode,
+    cmd: CmdLine,
     roll: PianoRoll,
     arranger: Arranger,
+    help_bar: Scrollbar,
     report: Option<(String, f32)>,
+    quit: bool,
 }
 
 impl Default for Studio {
@@ -68,9 +101,17 @@ impl Studio {
             roll_open: false,
             playing: false,
             position: 0.0,
+            setting: 0,
+            focus: FocusRing::new(&PANES),
+            keymap: keys::keymap(&KeysConfig::new()).expect("the default keys are valid"),
+            pending: Pending::new(),
+            mode: Mode::Normal,
+            cmd: CmdLine::new(),
             roll: PianoRoll::default(),
             arranger: Arranger::default(),
+            help_bar: Scrollbar::default(),
             report: None,
+            quit: false,
         }
     }
 
@@ -84,22 +125,224 @@ impl Studio {
         self.report.as_ref().map(|(t, _)| t.as_str())
     }
 
-    fn toggle_playback(&mut self) {
-        self.playing = !self.playing;
+    #[cfg(test)]
+    pub fn help_open(&self) -> bool {
+        matches!(self.mode, Mode::Help(_))
     }
 
-    fn rewind(&mut self) {
-        self.position = 0.0;
+    pub fn command_open(&self) -> bool {
+        matches!(self.mode, Mode::Command)
+    }
+
+    fn layers(&self) -> [&'static str; 2] {
+        keys::layers(self.focus.current(), self.roll_open)
     }
 
     fn open_roll(&mut self, channel: usize, pattern: usize) {
         self.current = channel;
         self.current_pattern = pattern;
         self.roll_open = true;
+        self.focus.set(Pane::Middle);
     }
 
     fn not_yet(&mut self, what: &str) {
         self.say(format!("{what} comes in a later version"));
+    }
+
+    /// The pattern of the block under the arrangement cursor, if any.
+    fn block_at_cursor(&self) -> Option<usize> {
+        let bar = self.arranger.cursor_bar;
+        self.song.channels[self.current]
+            .blocks()
+            .find(|(start, _, len)| (*start..start + len).contains(&bar))
+            .map(|(_, pattern, _)| pattern)
+    }
+
+    /// A list motion on a list of `len` rows with `selected` chosen.
+    fn walk(len: usize, selected: usize, nav: Nav, count: Option<usize>) -> usize {
+        let Some(motion) = vim::list_motion(nav, count) else {
+            return selected;
+        };
+        let mut list = VimList::new(len);
+        list.set_height(len);
+        list.select(selected);
+        list.apply(motion);
+        list.selected().unwrap_or(selected)
+    }
+
+    /// Does what a key or a clicked hint asks for.
+    fn act(&mut self, action: Action, count: Option<usize>) {
+        let n = count.unwrap_or(1).max(1);
+        match action {
+            Action::Nav(Nav::NextPane) => {
+                self.focus.focus_next();
+            }
+            Action::Nav(Nav::PrevPane) => {
+                self.focus.focus_prev();
+            }
+            Action::Nav(nav) => self.nav(nav, count),
+            Action::Play => self.playing = !self.playing,
+            Action::Rewind => self.position = 0.0,
+            Action::Help => self.mode = Mode::Help(Help::new(self.keymap.help(&self.layers()))),
+            Action::Command => self.mode = Mode::Command,
+            Action::Quit if self.roll_open => self.roll_open = false,
+            Action::Quit => self.quit = true,
+            Action::Close => self.roll_open = false,
+            Action::Save => self.not_yet("Saving"),
+            Action::Export => self.not_yet("Exporting"),
+            Action::Open => self.not_yet("Opening"),
+            Action::Mute => {
+                let channel = &mut self.song.channels[self.current];
+                channel.muted = !channel.muted;
+            }
+            Action::OpenRoll => {
+                let pattern = match self.focus.current() {
+                    Pane::Middle => self.block_at_cursor().unwrap_or(0),
+                    _ => self.current_pattern,
+                };
+                self.open_roll(self.current, pattern);
+            }
+            Action::Increase | Action::Decrease => {
+                let turn = if action == Action::Increase {
+                    n as i32
+                } else {
+                    -(n as i32)
+                };
+                self.step_setting(turn);
+            }
+            Action::ZoomIn => self.roll.zoom(n as i32),
+            Action::ZoomOut => self.roll.zoom(-(n as i32)),
+        }
+    }
+
+    fn step_setting(&mut self, turn: i32) {
+        let setting = Setting::ALL[self.setting];
+        let instrument = &mut self.song.channels[self.current].instrument;
+        for _ in 0..turn.unsigned_abs() {
+            instrument.step(setting, turn.signum());
+        }
+    }
+
+    /// A vim motion in the focused pane.
+    fn nav(&mut self, nav: Nav, count: Option<usize>) {
+        let n = count.unwrap_or(1).max(1) as isize;
+        let channels = self.song.channels.len();
+        match self.focus.current() {
+            Pane::Channels => self.current = Self::walk(channels, self.current, nav, count),
+            Pane::Instrument => match nav {
+                Nav::Left => self.step_setting(-(n as i32)),
+                Nav::Right => self.step_setting(n as i32),
+                _ => self.setting = Self::walk(Setting::ALL.len(), self.setting, nav, count),
+            },
+            Pane::Middle if self.roll_open => {
+                let end = self.song.channels[self.current].patterns[self.current_pattern].length();
+                self.roll.nav(nav, count, end);
+            }
+            Pane::Middle => {
+                let cursor = self.arranger.cursor_bar as isize;
+                let page = self.arranger.visible_bars() as isize;
+                match nav {
+                    Nav::Left => self.arranger.set_cursor(cursor - n),
+                    Nav::Right => self.arranger.set_cursor(cursor + n),
+                    Nav::LineStart => self.arranger.set_cursor(0),
+                    Nav::LineEnd => {
+                        let end = self
+                            .song
+                            .channels
+                            .iter()
+                            .flat_map(|c| c.blocks().map(|(start, _, len)| start + len))
+                            .max()
+                            .unwrap_or(BARS);
+                        self.arranger.set_cursor(end as isize - 1);
+                    }
+                    Nav::HalfPageDown => self.arranger.set_cursor(cursor + page / 2),
+                    Nav::HalfPageUp => self.arranger.set_cursor(cursor - page / 2),
+                    Nav::PageDown => self.arranger.set_cursor(cursor + page),
+                    Nav::PageUp => self.arranger.set_cursor(cursor - page),
+                    Nav::AlignCenter => self.arranger.center_cursor(),
+                    _ => self.current = Self::walk(channels, self.current, nav, count),
+                }
+            }
+        }
+    }
+
+    fn command(&mut self, name: &str, args: &[String]) {
+        match name {
+            "q" | "quit" => self.quit = true,
+            "help" => self.act(Action::Help, None),
+            "play" => self.playing = true,
+            "stop" => self.playing = false,
+            "tempo" => match args.first().and_then(|a| a.parse::<u32>().ok()) {
+                Some(tempo) => {
+                    let tempo =
+                        tempo.clamp(compose_core::song::TEMPO_MIN, compose_core::song::TEMPO_MAX);
+                    self.song.tempo = tempo;
+                }
+                None => self.say("usage: :tempo 40-300"),
+            },
+            "bar" => match args.first().and_then(|a| a.parse::<usize>().ok()) {
+                Some(bar) => self.jump_to_bar(bar),
+                None => self.say("usage: :bar N"),
+            },
+            n if n.parse::<usize>().is_ok() => self.jump_to_bar(n.parse().unwrap_or(1)),
+            other => self.say(format!("Unknown command :{other}")),
+        }
+    }
+
+    /// `:12`: the playhead and the cursor to bar 12.
+    fn jump_to_bar(&mut self, bar: usize) {
+        let bar = bar.clamp(1, BARS) - 1;
+        self.position = (bar as u32 * BEATS_PER_BAR) as f32;
+        self.arranger.set_cursor(bar as isize);
+    }
+
+    fn handle_key(&mut self, key: KeyEvent) {
+        match &mut self.mode {
+            Mode::Help(help) => {
+                let lookup = self.keymap.lookup(&["global"], key, &mut self.pending);
+                match lookup {
+                    Lookup::Action {
+                        action: Action::Nav(Nav::Down),
+                        count,
+                    } => help.scroll_by(count.unwrap_or(1) as isize, 0),
+                    Lookup::Action {
+                        action: Action::Nav(Nav::Up),
+                        count,
+                    } => help.scroll_by(-(count.unwrap_or(1) as isize), 0),
+                    Lookup::Action {
+                        action: Action::Nav(Nav::Top),
+                        ..
+                    } => help.scroll_to(true, 0),
+                    Lookup::Action {
+                        action: Action::Nav(Nav::Bottom),
+                        ..
+                    } => help.scroll_to(false, 0),
+                    Lookup::Pending => {}
+                    _ => self.mode = Mode::Normal,
+                }
+            }
+            Mode::Command => match self.cmd.handle_key(key) {
+                CmdAction::Submit(command) => {
+                    self.mode = Mode::Normal;
+                    self.command(&command.name, &command.args);
+                }
+                CmdAction::Complete { .. } => {
+                    if let Some(name) = completion::completion(&COMMANDS, self.cmd.input.text()) {
+                        self.cmd.input.set_text(name);
+                    }
+                }
+                CmdAction::Close => self.mode = Mode::Normal,
+                CmdAction::Continue => {}
+            },
+            Mode::Normal => {
+                let layers = self.layers();
+                if let Lookup::Action { action, count } =
+                    self.keymap.lookup(&layers, key, &mut self.pending)
+                {
+                    self.act(action, count);
+                }
+            }
+        }
     }
 
     fn layout(&self, ui: &Ui) -> Layout {
@@ -124,7 +367,28 @@ impl Studio {
             (area.w - CHANNEL_WIDTH - 3.0 * GAP).max(0.0),
             (bottom - top).max(0.0),
         );
-        Layout { transport, channels, instrument, middle, status }
+        Layout {
+            transport,
+            channels,
+            instrument,
+            middle,
+            status,
+        }
+    }
+
+    /// A panel with its title; the focused one has a highlighted border.
+    fn pane(&self, ui: &mut Ui, rect: Rect, title: &str, pane: Pane) {
+        panel(ui, rect);
+        let focused = self.focus.is(pane);
+        if focused {
+            ui.outline(rect, ui.theme.active);
+        }
+        let color = if focused {
+            ui.theme.title
+        } else {
+            ui.theme.muted
+        };
+        ui.text(Vec2::new(rect.x + PADDING, rect.y + PADDING), title, color);
     }
 
     fn draw_transport(&mut self, ui: &mut Ui, bounds: Rect) {
@@ -137,28 +401,32 @@ impl Studio {
         let mut x = GAP;
         let open = ui.row_width("Open");
         if button(ui, Rect::new(x, files, open, row), "Open") {
-            self.not_yet("Opening");
+            self.act(Action::Open, None);
         }
         x += open + 2.0;
         let export = ui.row_width("Export");
         if button(ui, Rect::new(x, files, export, row), "Export") {
-            self.not_yet("Exporting");
+            self.act(Action::Export, None);
         }
         x += export + 2.0;
         if button(ui, Rect::new(x, files, row, row), &icon::SAVE.to_string()) {
-            self.not_yet("Saving");
+            self.act(Action::Save, None);
         }
 
         // Playing in the lower row.
         let mut x = GAP;
-        let play = if self.playing { icon::PAUSE } else { icon::PLAY };
+        let play = if self.playing {
+            icon::PAUSE
+        } else {
+            icon::PLAY
+        };
         if button(ui, Rect::new(x, y, row, row), &play.to_string()) {
-            self.toggle_playback();
+            self.act(Action::Play, None);
         }
         x += row + 2.0;
         if button(ui, Rect::new(x, y, row, row), &icon::CROSS.to_string()) {
             self.playing = false;
-            self.rewind();
+            self.position = 0.0;
         }
         x += row + GAP * 2.0;
         if button(ui, Rect::new(x, y, row, row), "-") {
@@ -184,10 +452,8 @@ impl Studio {
 
     /// One row per channel: its name, and a speaker that mutes it.
     fn draw_channels(&mut self, ui: &mut Ui, bounds: Rect) {
-        panel(ui, bounds);
+        self.pane(ui, bounds, "Channels", Pane::Channels);
         let row = ui.row_height();
-        let muted = ui.theme.muted;
-        ui.text(Vec2::new(bounds.x + PADDING, bounds.y + PADDING), "Channels", muted);
         let mut y = bounds.y + row + 1.0;
         for i in 0..self.song.channels.len() {
             if y + row > bounds.bottom() {
@@ -211,7 +477,11 @@ impl Studio {
             } else {
                 ui.theme.text
             };
-            ui.text(Vec2::new(name.x + PADDING, name.y + PADDING), &channel.name, color);
+            ui.text(
+                Vec2::new(name.x + PADDING, name.y + PADDING),
+                &channel.name,
+                color,
+            );
             if hovered && ui.input.clicked {
                 // A click chooses the channel; the second of a double click
                 // opens or closes the roll.
@@ -220,11 +490,19 @@ impl Studio {
                 }
                 self.current = i;
                 if ui.input.double_clicked {
-                    self.roll_open = !self.roll_open;
+                    if self.roll_open {
+                        self.roll_open = false;
+                    } else {
+                        self.open_roll(i, self.current_pattern);
+                    }
                 }
             }
             let channel = &mut self.song.channels[i];
-            let sound = if channel.muted { icon::SOUND_OFF } else { icon::SOUND };
+            let sound = if channel.muted {
+                icon::SOUND_OFF
+            } else {
+                icon::SOUND
+            };
             if toggle(ui, speaker, &sound.to_string(), !channel.muted) {
                 channel.muted = !channel.muted;
             }
@@ -232,37 +510,56 @@ impl Studio {
         }
     }
 
-    /// How the chosen channel sounds.
+    /// How the chosen channel sounds. The chosen row is what `+` `-` `h` `l`
+    /// change.
     fn draw_instrument(&mut self, ui: &mut Ui, bounds: Rect) {
         let row = ui.row_height();
         if bounds.h < row * 2.0 {
             return;
         }
-        panel(ui, bounds);
-        let muted = ui.theme.muted;
-        ui.text(Vec2::new(bounds.x + PADDING, bounds.y + PADDING), "Instrument", muted);
-        let instrument = &mut self.song.channels[self.current].instrument;
+        self.pane(ui, bounds, "Instrument", Pane::Instrument);
+        let focused = self.focus.is(Pane::Instrument);
         let mut y = bounds.y + row + 1.0;
-        for setting in Setting::ALL {
+        for (i, setting) in Setting::ALL.into_iter().enumerate() {
             if y + row > bounds.bottom() {
                 break;
             }
             let line = Rect::new(bounds.x + 2.0, y, bounds.w - 4.0, row);
-            let turn = stepper(ui, line, setting.label(), &instrument.value(setting));
+            if focused && i == self.setting {
+                ui.fill(line, ui.theme.sunken);
+                ui.outline(line, ui.theme.highlight);
+            }
+            let instrument = &mut self.song.channels[self.current].instrument;
+            let turn = stepper(
+                ui,
+                line.inset(1.0),
+                setting.label(),
+                &instrument.value(setting),
+            );
             if turn != 0 {
                 instrument.step(setting, turn);
+                self.setting = i;
             }
             y += row + 1.0;
         }
     }
 
     fn draw_arrangement(&mut self, ui: &mut Ui, bounds: Rect) {
-        panel(ui, bounds);
+        self.pane(ui, bounds, "Arrangement", Pane::Middle);
         let row = ui.row_height();
-        let muted = ui.theme.muted;
-        ui.text(Vec2::new(bounds.x + PADDING, bounds.y + PADDING), "Arrangement", muted);
-        let area = Rect::new(bounds.x + 1.0, bounds.y + row, bounds.w - 2.0, bounds.h - row - 1.0);
-        let asked = self.arranger.draw(ui, area, &self.song, self.position);
+        let area = Rect::new(
+            bounds.x + 1.0,
+            bounds.y + row,
+            bounds.w - 2.0,
+            bounds.h - row - 1.0,
+        );
+        let cursor = self.focus.is(Pane::Middle).then_some(self.current);
+        let asked = self
+            .arranger
+            .draw(ui, area, &self.song, self.position, cursor);
+        if let Some((channel, _)) = asked.cursor {
+            self.current = channel;
+        }
         if let Some((channel, pattern)) = asked.open {
             self.open_roll(channel, pattern);
         }
@@ -272,7 +569,6 @@ impl Studio {
     }
 
     fn draw_pattern(&mut self, ui: &mut Ui, bounds: Rect) {
-        panel(ui, bounds);
         let row = ui.row_height();
         let channel = &mut self.song.channels[self.current];
         let colour = colors::channel(channel);
@@ -281,21 +577,47 @@ impl Studio {
             title.push_str("  Muted");
         }
         let notes = channel.pattern(self.current_pattern).notes().len();
+        self.pane(ui, bounds, &title, Pane::Middle);
         let count = format!("{notes} {}", if notes == 1 { "note" } else { "notes" });
         let muted = ui.theme.muted;
-        ui.text(Vec2::new(bounds.x + PADDING, bounds.y + PADDING), &title, muted);
         ui.text_right(Rect::new(bounds.x, bounds.y, bounds.w, row), &count, muted);
 
-        let area = Rect::new(bounds.x + 1.0, bounds.y + row, bounds.w - 2.0, bounds.h - row - 1.0);
+        let area = Rect::new(
+            bounds.x + 1.0,
+            bounds.y + row,
+            bounds.w - 2.0,
+            bounds.h - row - 1.0,
+        );
         let pattern = &self.song.channels[self.current].patterns[self.current_pattern];
-        if let Some(beats) = self.roll.draw(ui, area, pattern, colour, self.position, self.playing) {
+        let focused = self.focus.is(Pane::Middle);
+        if let Some(beats) = self.roll.draw(
+            ui,
+            area,
+            pattern,
+            colour,
+            self.position,
+            self.playing,
+            focused,
+        ) {
             self.position = beats;
         }
     }
 
-    /// What the program is doing, and the keys worth knowing.
+    /// What the program is doing on the left, the keys of the focused pane
+    /// on the right (clickable), or the `:` line.
     fn draw_status(&mut self, ui: &mut Ui, bounds: Rect) {
         bar(ui, bounds);
+        if self.command_open() {
+            let line = Rect::new(bounds.x, bounds.y + 1.0, bounds.w, bounds.h - 1.0);
+            let style = InputStyle {
+                prefix: ":",
+                placeholder: "",
+                ghost: None,
+                focused: true,
+            };
+            draw_input(ui, line, &mut self.cmd.input, style);
+            return;
+        }
         let beats = self.position as u32;
         let place = format!(
             "{}  Bar {}.{}",
@@ -309,46 +631,67 @@ impl Studio {
             None => (place, ui.theme.muted),
         };
         ui.text(Vec2::new(GAP, bounds.y + 2.0), &left, color);
-        let keys = if self.roll_open {
-            "Wheel pitch   Shift wheel time   Ctrl wheel zoom   Esc close"
-        } else {
-            "Space play   Enter rewind   Double click channel opens roll"
-        };
-        let at = Vec2::new(bounds.w - ui.row_width(keys), bounds.y + 2.0);
-        let muted = ui.theme.muted;
-        ui.text(at, keys, muted);
+        let used = ui.row_width(&left) + 2.0 * GAP;
+        let hints_rect = Rect::new(
+            used,
+            bounds.y + 1.0,
+            (bounds.w - used).max(0.0),
+            bounds.h - 1.0,
+        );
+        let actions = keys::hinted(self.focus.current(), self.roll_open);
+        let hints = self.keymap.hints(&self.layers(), actions);
+        let showcmd = self.pending.showcmd();
+        if let Some(i) = draw_hint_buttons(ui, hints_rect, &hints, HintStyle::Inline, &showcmd)
+            && let Some(action) = actions.get(i)
+        {
+            self.act(*action, None);
+        }
+    }
+
+    /// A click on a pane gives it the keyboard.
+    fn focus_on_click(&mut self, ui: &Ui, layout: &Layout) {
+        if !ui.input.clicked {
+            return;
+        }
+        let mouse = ui.input.mouse;
+        for (rect, pane) in [
+            (layout.channels, Pane::Channels),
+            (layout.instrument, Pane::Instrument),
+            (layout.middle, Pane::Middle),
+        ] {
+            if rect.contains(mouse) {
+                self.focus.set(pane);
+            }
+        }
     }
 }
 
 impl App for Studio {
     type Message = ();
 
-    fn update(&mut self, input: &Input, _: &mut Context<()>) {
+    fn update(&mut self, input: &Input, cx: &mut Context<()>) {
         if let Some((_, seconds)) = &mut self.report {
             *seconds -= input.dt;
             if *seconds <= 0.0 {
                 self.report = None;
             }
         }
+        for key in &input.keys {
+            self.handle_key(*key);
+        }
         if self.playing {
             self.position += input.dt * self.song.tempo as f32 / 60.0;
         }
-        for key in &input.keys {
-            match (key.code, key.modifiers) {
-                (KeyCode::Char(' '), Modifiers::NONE) => self.toggle_playback(),
-                (KeyCode::Enter, _) => self.rewind(),
-                (KeyCode::Backspace, m) if m.contains(Modifiers::SHIFT) => self.rewind(),
-                (KeyCode::Esc, _) => self.roll_open = false,
-                (KeyCode::Char('s'), m) if m.contains(Modifiers::CTRL) => self.not_yet("Saving"),
-                (KeyCode::Char('e'), m) if m.contains(Modifiers::CTRL) => self.not_yet("Exporting"),
-                (KeyCode::Char('o'), m) if m.contains(Modifiers::CTRL) => self.not_yet("Opening"),
-                _ => {}
-            }
+        if self.quit {
+            cx.quit();
         }
     }
 
     fn draw(&mut self, ui: &mut Ui) {
         let layout = self.layout(ui);
+        if matches!(self.mode, Mode::Normal) {
+            self.focus_on_click(ui, &layout);
+        }
         self.draw_transport(ui, layout.transport);
         self.draw_channels(ui, layout.channels);
         self.draw_instrument(ui, layout.instrument);
@@ -358,12 +701,19 @@ impl App for Studio {
             self.draw_arrangement(ui, layout.middle);
         }
         self.draw_status(ui, layout.status);
+        if let Mode::Help(help) = &mut self.mode {
+            let area = ui.area();
+            if draw_help(ui, area, help, &mut self.help_bar) {
+                self.mode = Mode::Normal;
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use compose_core::song::BARS;
     use pingo_gui::testing::Harness;
 
     /// The default window: 1280×720 at scale 2.
@@ -374,7 +724,9 @@ mod tests {
     /// Writes the frame to the folder in `PINGO_SHOTS`, for looking at it.
     fn shot(raster: &pingo_gui::testing::Raster, name: &str) {
         if let Some(dir) = std::env::var_os("PINGO_SHOTS") {
-            raster.save_png(std::path::Path::new(&dir).join(name), 2).unwrap();
+            raster
+                .save_png(std::path::Path::new(&dir).join(name), 2)
+                .unwrap();
         }
     }
 
@@ -383,7 +735,20 @@ mod tests {
         let mut h = harness();
         let frame = h.frame();
         shot(&frame, "studio.png");
-        for text in ["Open", "Export", "120 BPM", "Untitled song", "Channels", "Pulse 1", "Sample", "Instrument", "Square", "Vol", "Arrangement", "Stopped  Bar 1.1"] {
+        for text in [
+            "Open",
+            "Export",
+            "120 BPM",
+            "Untitled song",
+            "Channels",
+            "Pulse 1",
+            "Sample",
+            "Instrument",
+            "Square",
+            "Vol",
+            "Arrangement",
+            "Stopped  Bar 1.1",
+        ] {
             assert!(frame.find_text(text).is_some(), "{text} is missing");
         }
     }
@@ -396,7 +761,7 @@ mod tests {
         h.click(20.0, y);
         assert_eq!(h.app.current, 1);
         assert!(!h.app.roll_open);
-        let frame = h.double_click(20.0, y);
+        h.double_click(20.0, y);
         assert!(h.app.roll_open);
         let frame = h.frame();
         shot(&frame, "roll.png");
@@ -420,7 +785,10 @@ mod tests {
         assert!(h.app.playing);
         h.frame();
         assert!(h.app.position > 0.0);
-        h.press(KeyEvent::plain(KeyCode::Enter));
+        // Enter opens the roll in the channels pane; shift-backspace rewinds
+        // everywhere.
+        h.keys(" ");
+        h.press(KeyEvent::new(KeyCode::Backspace, Modifiers::SHIFT));
         assert_eq!(h.app.position, 0.0);
         h.press(KeyEvent::ctrl('s'));
         assert_eq!(h.app.report(), Some("Saving comes in a later version"));
@@ -450,7 +818,10 @@ mod tests {
         // The + is the last button of the row.
         let plus = Vec2::new(GAP + CHANNEL_WIDTH - 2.0 - 5.0, vol.y);
         h.click(plus.x, plus.y);
-        assert_eq!(h.app.song.channels[0].instrument.value(Setting::Volume), "65");
+        assert_eq!(
+            h.app.song.channels[0].instrument.value(Setting::Volume),
+            "65"
+        );
     }
 
     #[test]
@@ -463,10 +834,140 @@ mod tests {
         h.frame();
         let top = h.app.roll.top_pitch;
         h.wheel(400.0, 150.0, 2.0);
-        assert_eq!(h.app.roll.top_pitch, (top + 6).min(compose_core::pattern::HIGHEST_PITCH));
+        assert_eq!(
+            h.app.roll.top_pitch,
+            (top + 6).min(compose_core::pattern::HIGHEST_PITCH)
+        );
         h.input.ctrl = true;
         h.wheel(400.0, 150.0, 1.0);
         assert!(h.app.roll.step_width > 8.0);
+    }
+
+    #[test]
+    fn tab_and_clicks_move_the_focus() {
+        let mut h = harness();
+        assert!(h.app.focus.is(Pane::Channels));
+        h.keys("<tab>");
+        assert!(h.app.focus.is(Pane::Instrument));
+        h.keys("<tab>");
+        assert!(h.app.focus.is(Pane::Middle));
+        h.keys("<s-tab><s-tab>");
+        assert!(h.app.focus.is(Pane::Channels));
+        h.click(400.0, 200.0);
+        assert!(h.app.focus.is(Pane::Middle));
+    }
+
+    #[test]
+    fn channels_by_vim_keys() {
+        let mut h = harness();
+        h.keys("3j");
+        assert_eq!(h.app.current, 3);
+        h.keys("G");
+        assert_eq!(h.app.current, 4);
+        h.keys("gg");
+        assert_eq!(h.app.current, 0);
+        h.keys("2G");
+        assert_eq!(h.app.current, 1);
+        h.keys("m");
+        assert!(h.app.song.channels[1].muted);
+        h.keys("o");
+        assert!(h.app.roll_open);
+        assert!(h.app.focus.is(Pane::Middle));
+        h.keys("q");
+        assert!(!h.app.roll_open);
+        assert!(!h.quit);
+        h.keys("q");
+        assert!(h.quit);
+    }
+
+    #[test]
+    fn instrument_by_vim_keys() {
+        let mut h = harness();
+        h.keys("<tab>j+");
+        assert_eq!(h.app.setting, 1);
+        assert_eq!(
+            h.app.song.channels[0].instrument.value(Setting::Volume),
+            "65"
+        );
+        h.keys("3h");
+        assert_eq!(
+            h.app.song.channels[0].instrument.value(Setting::Volume),
+            "50"
+        );
+        h.keys("ggl");
+        assert_eq!(
+            h.app.song.channels[0].instrument.value(Setting::Wave),
+            "Pulse"
+        );
+        let frame = h.frame();
+        shot(&frame, "instrument-focus.png");
+    }
+
+    #[test]
+    fn arrangement_cursor() {
+        let mut h = harness();
+        h.keys("<tab><tab>5l2j");
+        assert_eq!((h.app.arranger.cursor_bar, h.app.current), (5, 2));
+        h.keys("$");
+        assert_eq!(h.app.arranger.cursor_bar, BARS - 1);
+        assert!(h.app.arranger.scroll > 0.0, "the view follows the cursor");
+        h.keys("^");
+        assert_eq!((h.app.arranger.cursor_bar, h.app.arranger.scroll), (0, 0.0));
+        let frame = h.keys("3l");
+        shot(&frame, "arrangement-cursor.png");
+        // No block under the cursor: the channel's first pattern opens.
+        h.keys("<cr>");
+        assert!(h.app.roll_open);
+        assert_eq!((h.app.current, h.app.current_pattern), (2, 0));
+    }
+
+    #[test]
+    fn roll_cursor_and_zoom() {
+        let mut h = harness();
+        h.keys("o");
+        let pitch = h.app.roll.cursor_pitch;
+        h.keys("10k4l");
+        assert_eq!(h.app.roll.cursor_pitch, pitch + 10);
+        assert_eq!(h.app.roll.cursor_step, 4);
+        h.keys("+");
+        assert!(h.app.roll.step_width > 8.0);
+        let frame = h.keys("zz");
+        shot(&frame, "roll-cursor.png");
+        h.keys("<esc>");
+        assert!(!h.app.roll_open);
+    }
+
+    #[test]
+    fn help_and_commands() {
+        let mut h = harness();
+        let frame = h.keys("?");
+        assert!(h.app.help_open());
+        shot(&frame, "help.png");
+        assert!(frame.find_text("half page down").is_some());
+        h.keys("j");
+        assert!(h.app.help_open(), "j scrolls the help");
+        h.keys("q");
+        assert!(!h.app.help_open());
+        assert!(!h.quit, "q only closed the help");
+        let frame = h.keys(":tempo 140");
+        assert!(h.app.command_open());
+        shot(&frame, "command.png");
+        h.keys("<cr>");
+        assert_eq!(h.app.song.tempo, 140);
+        h.keys(":12<cr>");
+        assert_eq!(h.app.position, 44.0);
+        h.keys(":nope<cr>");
+        assert_eq!(h.app.report(), Some("Unknown command :nope"));
+    }
+
+    #[test]
+    fn hints_are_clickable() {
+        let mut h = harness();
+        let frame = h.frame();
+        // The channels pane hints at "o open roll".
+        let at = frame.find_text("open roll").expect("hint shown");
+        h.click(at.x + 4.0, at.y + 4.0);
+        assert!(h.app.roll_open);
     }
 
     #[test]

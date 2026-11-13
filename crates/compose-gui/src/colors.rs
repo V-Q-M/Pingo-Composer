@@ -35,5 +35,9 @@ const MUTED_SHADE: f32 = 0.4;
 pub fn channel(channel: &Channel) -> Rgba {
     let c = channel.colour;
     let colour = Rgba::rgb(c.0, c.1, c.2);
-    if channel.muted { colour.shade(MUTED_SHADE) } else { colour }
+    if channel.muted {
+        colour.shade(MUTED_SHADE)
+    } else {
+        colour
+    }
 }

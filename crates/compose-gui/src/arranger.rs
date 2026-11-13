@@ -2,8 +2,10 @@
 //! cell means that pattern of the channel plays in that bar.
 //!
 //! First iteration: looking around. The wheel and a trackpad scroll through
-//! the bars, the ruler moves the playhead, and a double click on a block or
-//! a channel's name opens its pattern in the roll. Placing blocks follows.
+//! the bars, the ruler moves the playhead, a click puts the cursor on a cell,
+//! and a double click on a block or a channel's name opens its pattern in the
+//! roll. With the keyboard the cursor walks the cells (`h` `j` `k` `l`, `^`
+//! `$`, `ctrl-d` `ctrl-u`, `zz`). Placing blocks follows.
 
 use compose_core::Song;
 use compose_core::pattern::BEATS_PER_BAR;
@@ -30,6 +32,8 @@ const SCROLL_BARS: f32 = 2.0;
 pub struct Asked {
     /// Open this channel's pattern in the roll.
     pub open: Option<(usize, usize)>,
+    /// A click put the cursor on this channel and bar.
+    pub cursor: Option<(usize, usize)>,
     /// Move the playhead here, in beats.
     pub scrub: Option<f32>,
 }
@@ -39,6 +43,10 @@ pub struct Asked {
 pub struct Arranger {
     /// The first bar on the left.
     pub scroll: f32,
+    /// The bar the keyboard cursor is in; its row is the chosen channel.
+    pub cursor_bar: usize,
+    /// How many bars fit, from the last frame.
+    visible: f32,
 }
 
 struct Grid {
@@ -50,8 +58,18 @@ struct Grid {
 impl Arranger {
     fn grid(bounds: Rect) -> Grid {
         Grid {
-            ruler: Rect::new(bounds.x + NAMES_WIDTH, bounds.y, bounds.w - NAMES_WIDTH, RULER_HEIGHT),
-            names: Rect::new(bounds.x, bounds.y + RULER_HEIGHT, NAMES_WIDTH, bounds.h - RULER_HEIGHT),
+            ruler: Rect::new(
+                bounds.x + NAMES_WIDTH,
+                bounds.y,
+                bounds.w - NAMES_WIDTH,
+                RULER_HEIGHT,
+            ),
+            names: Rect::new(
+                bounds.x,
+                bounds.y + RULER_HEIGHT,
+                NAMES_WIDTH,
+                bounds.h - RULER_HEIGHT,
+            ),
             area: Rect::new(
                 bounds.x + NAMES_WIDTH,
                 bounds.y + RULER_HEIGHT,
@@ -77,12 +95,57 @@ impl Arranger {
         ((y - grid.area.y) / ROW_HEIGHT).floor() as i32
     }
 
-    /// Draws the arrangement into `bounds`; `playhead` is in beats.
-    pub fn draw(&mut self, ui: &mut Ui, bounds: Rect, song: &Song, playhead: f32) -> Asked {
+    /// How many whole bars fit, from the last frame (at least one).
+    pub fn visible_bars(&self) -> usize {
+        (self.visible.floor() as usize).max(1)
+    }
+
+    /// Puts the cursor on `bar` (clamped) and scrolls it into view.
+    pub fn set_cursor(&mut self, bar: isize) {
+        self.cursor_bar = bar.clamp(0, BARS as isize - 1) as usize;
+        let bar = self.cursor_bar as f32;
+        let visible = self.visible_bars() as f32;
+        if bar < self.scroll {
+            self.scroll = bar;
+        } else if bar + 1.0 > self.scroll + visible {
+            self.scroll = bar + 1.0 - visible;
+        }
+    }
+
+    /// Scrolls so the cursor is in the middle (`zz`).
+    pub fn center_cursor(&mut self) {
+        let half = self.visible_bars() as f32 / 2.0;
+        self.scroll = (self.cursor_bar as f32 - half)
+            .clamp(0.0, BARS as f32 - 1.0)
+            .floor();
+    }
+
+    /// Draws the arrangement into `bounds`; `playhead` is in beats. The
+    /// cursor shows on channel `cursor_row` when the pane is focused.
+    pub fn draw(
+        &mut self,
+        ui: &mut Ui,
+        bounds: Rect,
+        song: &Song,
+        playhead: f32,
+        cursor_row: Option<usize>,
+    ) -> Asked {
         let grid = Self::grid(bounds);
+        self.visible = grid.area.w / BAR_WIDTH;
         let mut asked = Asked::default();
         self.handle_mouse(ui, &grid, song, &mut asked);
-        ui.clipped(grid.area, |ui| self.draw_cells(ui, &grid, song, playhead));
+        ui.clipped(grid.area, |ui| {
+            self.draw_cells(ui, &grid, song, playhead);
+            if let Some(row) = cursor_row {
+                let cell = Rect::new(
+                    self.x_of(&grid, self.cursor_bar as f32),
+                    Self::y_of(&grid, row),
+                    BAR_WIDTH + 1.0,
+                    ROW_HEIGHT,
+                );
+                ui.outline(cell, ui.theme.highlight);
+            }
+        });
         ui.clipped(grid.names, |ui| Self::draw_names(ui, &grid, song));
         self.draw_ruler(ui, &grid, playhead, &mut asked);
         asked
@@ -97,6 +160,14 @@ impl Arranger {
 
             let bar = self.bar_at(grid, input.mouse.x);
             let row = Self::row_at(grid, input.mouse.y);
+            if input.clicked
+                && let (Ok(b), Ok(r)) = (usize::try_from(bar), usize::try_from(row))
+                && r < song.channels.len()
+                && b < BARS
+            {
+                self.cursor_bar = b;
+                asked.cursor = Some((r, b));
+            }
             if input.double_clicked
                 && let (Ok(bar), Ok(row)) = (usize::try_from(bar), usize::try_from(row))
                 && let Some(channel) = song.channels.get(row)
@@ -123,13 +194,24 @@ impl Arranger {
         // The rows first, so empty bars can still be seen.
         for i in 0..song.channels.len() {
             let y = Self::y_of(grid, i);
-            let color = if i % 2 == 0 { colors::ROW } else { colors::ROW_ALT };
+            let color = if i % 2 == 0 {
+                colors::ROW
+            } else {
+                colors::ROW_ALT
+            };
             ui.fill(Rect::new(area.x, y, area.w, ROW_HEIGHT - 1.0), color);
         }
         let mut bar = self.scroll.floor() as usize;
         while self.x_of(grid, bar as f32) < area.right() && bar <= BARS {
-            let line = if bar % BARS_PER_GROUP == 0 { ui.theme.grid_accent } else { ui.theme.grid };
-            ui.fill(Rect::new(self.x_of(grid, bar as f32), area.y, 1.0, area.h), line);
+            let line = if bar.is_multiple_of(BARS_PER_GROUP) {
+                ui.theme.grid_accent
+            } else {
+                ui.theme.grid
+            };
+            ui.fill(
+                Rect::new(self.x_of(grid, bar as f32), area.y, 1.0, area.h),
+                line,
+            );
             bar += 1;
         }
         // The blocks, as wide as their pattern is long, with its number.
@@ -167,11 +249,22 @@ impl Arranger {
                 break;
             }
             let row = Rect::new(grid.names.x, y, grid.names.w - 1.0, ROW_HEIGHT - 1.0);
-            let color = if i % 2 == 0 { colors::ROW } else { colors::ROW_ALT };
+            let color = if i % 2 == 0 {
+                colors::ROW
+            } else {
+                colors::ROW_ALT
+            };
             ui.fill(row, color);
             // A short line in the channel's color, so rows and blocks match.
-            ui.fill(Rect::new(row.x, row.y, 2.0, row.h), colors::channel(channel));
-            let text = if channel.muted { ui.theme.muted } else { ui.theme.text };
+            ui.fill(
+                Rect::new(row.x, row.y, 2.0, row.h),
+                colors::channel(channel),
+            );
+            let text = if channel.muted {
+                ui.theme.muted
+            } else {
+                ui.theme.text
+            };
             let at = Vec2::new(row.x + 5.0, row.y + (row.h - ui.font.line_height()) / 2.0);
             ui.text(at, &channel.name, text);
         }
@@ -183,11 +276,15 @@ impl Arranger {
         ui.clipped(ruler, |ui| {
             let mut bar = self.scroll.floor() as usize;
             while self.x_of(grid, bar as f32) < ruler.right() && bar < BARS {
-                if bar % BARS_PER_GROUP == 0 {
+                if bar.is_multiple_of(BARS_PER_GROUP) {
                     let x = self.x_of(grid, bar as f32);
                     ui.fill(Rect::new(x, ruler.y, 1.0, ruler.h), ui.theme.surface_border);
                     let muted = ui.theme.muted;
-                    ui.text(Vec2::new(x + 2.0, ruler.y + 1.0), &(bar + 1).to_string(), muted);
+                    ui.text(
+                        Vec2::new(x + 2.0, ruler.y + 1.0),
+                        &(bar + 1).to_string(),
+                        muted,
+                    );
                 }
                 bar += 1;
             }

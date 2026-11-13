@@ -11,8 +11,12 @@ pub const STEPS_PER_BAR: u32 = STEPS_PER_BEAT * BEATS_PER_BAR;
 pub const LOWEST_PITCH: i32 = 24;
 pub const HIGHEST_PITCH: i32 = 107;
 
-const PITCH_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-const SHARP: [bool; 12] = [false, true, false, true, false, false, true, false, true, false, true, false];
+const PITCH_NAMES: [&str; 12] = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
+const SHARP: [bool; 12] = [
+    false, true, false, true, false, false, true, false, true, false, true, false,
+];
 
 /// The name of a pitch, e.g. "C4" or "F#3".
 pub fn pitch_name(pitch: i32) -> String {

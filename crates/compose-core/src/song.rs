@@ -202,7 +202,10 @@ impl Channel {
         Channel {
             name: name.to_string(),
             colour,
-            instrument: Instrument { wave, ..Instrument::default() },
+            instrument: Instrument {
+                wave,
+                ..Instrument::default()
+            },
             muted: false,
             patterns: vec![Pattern::default()],
             bars: vec![None; BARS],
@@ -222,7 +225,10 @@ impl Channel {
     pub fn blocks(&self) -> impl Iterator<Item = (usize, usize, usize)> + '_ {
         self.bars.iter().enumerate().filter_map(|(bar, p)| {
             let p = (*p)?;
-            let bars = self.patterns.get(p).map_or(1, |pattern| pattern.bars() as usize);
+            let bars = self
+                .patterns
+                .get(p)
+                .map_or(1, |pattern| pattern.bars() as usize);
             Some((bar, p, bars))
         })
     }

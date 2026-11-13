@@ -22,7 +22,8 @@ hear it played by a small sound chip. It is the music companion of
 
 The composer is being rewritten in Rust on [PingoCore](https://github.com/V-Q-M/PingoCore)'s `pingo-gui`, the
 raylib frontend all Pingo apps share. The first iteration has the screens: transport, channels, instrument,
-arrangement and piano roll can be looked at and walked through; nothing sounds and no notes are written yet.
+arrangement and piano roll can be looked at and walked through, with the mouse or with vim keys; nothing sounds and
+no notes are written yet.
 
 ```
 crates/compose-core   the song: channels, patterns, instruments (no UI)
@@ -33,6 +34,25 @@ crates/compose-gui    the window (binary `pingo-compose`)
 cargo run --release                     # needs CMake, clang and the X11/GL development files (raylib builds from source)
 cargo test                              # draws the screens headless; PINGO_SHOTS=dir also saves them as PNGs
 ```
+
+### Keys (Rust version)
+
+Everything works with the mouse and with vim keys; `?` lists every key of the focused pane. Counts work (`5j`, `3l`).
+
+| Key | Action |
+| --- | --- |
+| `tab` / `shift-tab`, a click | Focus the next / previous pane (channels, instrument, arrangement or roll) |
+| `j` `k`, `gg` `G`, `ctrl-d` `ctrl-u` | Move in the focused pane: the channel, the instrument setting, the cursor cell |
+| `h` `l`, `^` `$`, `zz` | Arrangement and roll: move the cursor through the time, center the view on it |
+| `o` / `enter` | Open the roll (the block under the cursor, or the channel's first pattern) |
+| `q` / `esc` | Close the roll; `q` again quits |
+| `m` | Mute the chosen channel |
+| `+` `-` (`h` `l` in the instrument) | Change the chosen instrument setting; zoom in the roll |
+| `space`, `shift-backspace` | Play / pause, rewind |
+| `:` | Commands: `:tempo 140`, `:12` (jump to bar 12), `:play`, `:stop`, `:help`, `:q` |
+| `?` | Help |
+
+The hints in the status line can be clicked as well.
 
 PingoCore is fetched over SSH (`.cargo/config.toml`). To work on both at once with `../PingoCore` checked out, add a
 `[patch]` table there as PingoCore's `docs/EMBEDDING.md` describes, and leave it out of commits.
