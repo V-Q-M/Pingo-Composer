@@ -12,7 +12,8 @@ mod studio;
 
 use std::process::ExitCode;
 
-use pingo_gui::{GuiTheme, Window, WindowOptions};
+use pingo_gui::font::FontChoice;
+use pingo_gui::{Look, Window, WindowOptions};
 
 use crate::studio::Studio;
 
@@ -35,6 +36,10 @@ fn main() -> ExitCode {
 
     let options = WindowOptions {
         title: "Pingo Composer".into(),
+        // A pixel-art tool: the Pingo look and its pixel font, until the user
+        // picks another in the settings.
+        look: Look::Pingo,
+        font: FontChoice::Auto,
         ..WindowOptions::default()
     };
     let mut window = match Window::open(options) {
@@ -44,7 +49,6 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    window.set_theme(GuiTheme::pingo());
     if let Some(path) = shot {
         window.take_shot(path);
     }
