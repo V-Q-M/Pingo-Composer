@@ -15,14 +15,20 @@
 use compose_core::Song;
 use compose_core::pattern::BEATS_PER_BAR;
 use compose_core::song::{BARS, Setting};
+use pingo_gui::GuiError;
+use pingo_gui::font::FontChoice;
 use pingo_gui::pingo_ui::components::focus::FocusRing;
 use pingo_gui::pingo_ui::components::help::Help;
 use pingo_gui::pingo_ui::components::list::VimList;
+use pingo_gui::pingo_ui::components::settings::{SettingsAction, SettingsMenu};
+use pingo_gui::pingo_ui::input::KeyStyle;
 use pingo_gui::pingo_ui::input::keymap::{Keymap, KeysConfig, Lookup};
 use pingo_gui::pingo_ui::input::vim::{self, Nav};
 use pingo_gui::pingo_ui::input::{CmdAction, CmdLine, Pending, completion};
 use pingo_gui::prelude::*;
+use pingo_gui::theme::Look;
 use pingo_gui::ui::PADDING;
+use pingo_gui::widgets::draw_settings;
 use pingo_gui::widgets::help::draw_help;
 use pingo_gui::widgets::hints::{HintStyle, draw_hint_buttons};
 use pingo_gui::widgets::input::{InputStyle, draw_input};
@@ -32,6 +38,7 @@ use crate::arranger::Arranger;
 use crate::colors;
 use crate::keys::{self, Action, PANES, Pane};
 use crate::piano_roll::PianoRoll;
+use crate::prefs::{Pref, Prefs, SECTIONS};
 
 /// Heights of the bars and the width of the channel list, in canvas pixels.
 /// The transport holds two rows: files above, playing below.
@@ -44,7 +51,9 @@ pub const GAP: f32 = 3.0;
 const REPORT_SECONDS: f32 = 4.0;
 
 /// Names `:` completes.
-const COMMANDS: [&str; 6] = ["help", "play", "quit", "stop", "tempo", "bar"];
+const COMMANDS: [&str; 10] = [
+    "help", "play", "quit", "stop", "tempo", "bar", "set", "look", "font", "keys",
+];
 
 /// Where everything sits, worked out from the canvas every frame.
 struct Layout {
@@ -60,6 +69,7 @@ enum Mode {
     Normal,
     Help(Help),
     Command,
+    Settings(SettingsMenu<Pref>),
 }
 
 /// The composer's screen and everything it shows.
@@ -84,6 +94,11 @@ pub struct Studio {
     help_bar: Scrollbar,
     report: Option<(String, f32)>,
     quit: bool,
+    /// Look, font and key style.
+    pub prefs: Prefs,
+    /// Look and font changes waiting for the next `update`, which can
+    /// hand them to the window.
+    apply: Vec<Pref>,
 }
 
 impl Default for Studio {
@@ -103,7 +118,8 @@ impl Studio {
             position: 0.0,
             setting: 0,
             focus: FocusRing::new(&PANES),
-            keymap: keys::keymap(&KeysConfig::new()).expect("the default keys are valid"),
+            keymap: keys::keymap(&KeysConfig::new(), KeyStyle::Vim)
+                .expect("the default keys are valid"),
             pending: Pending::new(),
             mode: Mode::Normal,
             cmd: CmdLine::new(),
@@ -112,6 +128,8 @@ impl Studio {
             help_bar: Scrollbar::default(),
             report: None,
             quit: false,
+            prefs: Prefs::default(),
+            apply: Vec::new(),
         }
     }
 
@@ -212,6 +230,7 @@ impl Studio {
             }
             Action::ZoomIn => self.roll.zoom(n as i32),
             Action::ZoomOut => self.roll.zoom(-(n as i32)),
+            Action::Settings => self.mode = Mode::Settings(SettingsMenu::new(SECTIONS)),
         }
     }
 
@@ -270,6 +289,31 @@ impl Studio {
         match name {
             "q" | "quit" => self.quit = true,
             "help" => self.act(Action::Help, None),
+            "set" => self.act(Action::Settings, None),
+            "look" => match args.first().map(|a| a.parse::<Look>()) {
+                Some(Ok(look)) => {
+                    self.prefs.look = look;
+                    self.changed(Pref::Look);
+                }
+                Some(Err(e)) => self.say(e),
+                None => self.say("usage: :look pingo|thinkos|terminal|mono"),
+            },
+            "font" => match args.first().map(|a| a.parse::<FontChoice>()) {
+                Some(Ok(font)) => {
+                    self.prefs.font = font;
+                    self.changed(Pref::Font);
+                }
+                Some(Err(e)) => self.say(e.to_string()),
+                None => self.say("usage: :font auto|pingo|mono|sans|PATH"),
+            },
+            "keys" => match args.first().map(|a| a.parse::<KeyStyle>()) {
+                Some(Ok(style)) => {
+                    self.prefs.keys = style;
+                    self.changed(Pref::Keys);
+                }
+                Some(Err(e)) => self.say(e),
+                None => self.say("usage: :keys vim|simple"),
+            },
             "play" => self.playing = true,
             "stop" => self.playing = false,
             "tempo" => match args.first().and_then(|a| a.parse::<u32>().ok()) {
@@ -296,8 +340,36 @@ impl Studio {
         self.arranger.set_cursor(bar as isize);
     }
 
+    /// A preference changed: keys apply now, look and font at the next
+    /// `update` (the window loads the font).
+    fn changed(&mut self, pref: Pref) {
+        match pref {
+            Pref::Keys => {
+                self.keymap = keys::keymap(&KeysConfig::new(), self.prefs.keys)
+                    .expect("the default keys are valid");
+                self.pending.clear();
+            }
+            Pref::Look | Pref::Font => self.apply.push(pref),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn key_style(&self) -> KeyStyle {
+        self.keymap.style()
+    }
+
+    #[cfg(test)]
+    pub fn settings_open(&self) -> bool {
+        matches!(self.mode, Mode::Settings(_))
+    }
+
     fn handle_key(&mut self, key: KeyEvent) {
         match &mut self.mode {
+            Mode::Settings(menu) => match menu.handle_key(key, &mut self.prefs) {
+                SettingsAction::Changed(pref) => self.changed(pref),
+                SettingsAction::Close => self.mode = Mode::Normal,
+                SettingsAction::None => {}
+            },
             Mode::Help(help) => {
                 let lookup = self.keymap.lookup(&["global"], key, &mut self.pending);
                 match lookup {
@@ -411,6 +483,11 @@ impl Studio {
         x += export + 2.0;
         if button(ui, Rect::new(x, files, row, row), &icon::SAVE.to_string()) {
             self.act(Action::Save, None);
+        }
+        x += row + GAP * 2.0;
+        let settings = ui.row_width("Settings");
+        if button(ui, Rect::new(x, files, settings, row), "Settings") {
+            self.act(Action::Settings, None);
         }
 
         // Playing in the lower row.
@@ -692,6 +769,12 @@ impl App for Studio {
         for key in &input.keys {
             self.handle_key(*key);
         }
+        for pref in std::mem::take(&mut self.apply) {
+            match pref {
+                Pref::Look => cx.set_look(self.prefs.look),
+                _ => cx.set_font(self.prefs.font.clone()),
+            }
+        }
         if self.playing {
             self.position += input.dt * self.song.tempo as f32 / 60.0;
         }
@@ -702,8 +785,8 @@ impl App for Studio {
 
     fn draw(&mut self, ui: &mut Ui) {
         let layout = self.layout(ui);
-        if matches!(self.mode, Mode::Help(_)) {
-            // Under the help popup nothing takes the mouse.
+        if matches!(self.mode, Mode::Help(_) | Mode::Settings(_)) {
+            // Under a popup nothing takes the mouse.
             ui.without_pointer(|ui| self.draw_screen(ui, &layout));
         } else {
             self.focus_on_click(ui, &layout);
@@ -715,6 +798,18 @@ impl App for Studio {
                 self.mode = Mode::Normal;
             }
         }
+        if let Mode::Settings(menu) = &mut self.mode {
+            let area = ui.area();
+            match draw_settings(ui, area, menu, &mut self.prefs) {
+                SettingsAction::Changed(pref) => self.changed(pref),
+                SettingsAction::Close => self.mode = Mode::Normal,
+                SettingsAction::None => {}
+            }
+        }
+    }
+
+    fn font_failed(&mut self, error: GuiError) {
+        self.say(format!("Font: {error}"));
     }
 }
 
@@ -988,6 +1083,70 @@ mod tests {
         let at = frame.find_text("open roll").expect("hint shown");
         h.click(at.x + 4.0, at.y + 4.0);
         assert!(h.app.roll_open);
+    }
+
+    #[test]
+    fn settings_popup_changes_look_font_and_keys() {
+        let mut h = harness();
+        let frame = h.keys("<f2>");
+        assert!(h.app.settings_open());
+        shot(&frame, "settings.png");
+        // Look is the first row: l cycles it, the window gets the theme.
+        h.keys("l");
+        h.frame();
+        assert_eq!(h.app.prefs.look, Look::ALL[1]);
+        assert_eq!(h.theme, Look::ALL[1].theme());
+        // Vim keys off: the keymap drops the letters.
+        h.keys("jjl");
+        assert_eq!(h.app.key_style(), KeyStyle::Simple);
+        h.keys("<esc>");
+        assert!(!h.app.settings_open());
+        h.keys("j");
+        assert_eq!(h.app.current, 0, "j does nothing in simple keys");
+        h.keys("<down>");
+        assert_eq!(h.app.current, 1);
+        let frame = h.frame();
+        shot(&frame, "simple-keys.png");
+        assert!(frame.find_text("open roll").is_some());
+        assert!(frame.find_text("f1").is_some() || frame.find_text("help").is_some());
+        h.keys("<cr>");
+        assert!(h.app.roll_open, "enter opens the roll in simple keys");
+        h.keys("<esc>");
+        assert!(!h.app.roll_open);
+    }
+
+    #[test]
+    fn the_settings_button_opens_the_popup() {
+        let mut h = harness();
+        let frame = h.frame();
+        let at = frame.find_text("Settings").expect("button shown");
+        h.click(at.x + 4.0, at.y + 4.0);
+        assert!(h.app.settings_open());
+        // Nothing under the popup reacts.
+        let y = TRANSPORT_HEIGHT + GAP + 18.0 + 1.0 + 19.0 + 5.0;
+        h.click(20.0, y);
+        assert_eq!(h.app.current, 0);
+    }
+
+    #[test]
+    fn look_and_font_commands() {
+        let mut h = harness();
+        h.keys(":look terminal<cr>");
+        h.frame();
+        assert_eq!(h.theme, "terminal".parse::<Look>().unwrap().theme());
+        h.keys(":font /nowhere/missing.ttf<cr>");
+        h.frame();
+        let report = h.app.report().unwrap_or_default().to_string();
+        assert!(report.starts_with("Font:"), "{report}");
+        // A system font, where this machine has one: the smooth style.
+        if pingo_gui::font::system_font(&FontChoice::Mono).is_some() {
+            h.keys(":font mono<cr>");
+            let frame = h.frame();
+            shot(&frame, "mono-font.png");
+            assert_eq!(h.app.prefs.font, FontChoice::Mono);
+        }
+        h.keys(":keys simple<cr>");
+        assert_eq!(h.app.key_style(), KeyStyle::Simple);
     }
 
     #[test]

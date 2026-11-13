@@ -50,9 +50,15 @@ Everything works with the mouse and with vim keys; `?` lists every key of the fo
 | `+` `-` (`h` `l` in the instrument) | Change the chosen instrument setting; zoom in the roll |
 | `space`, `shift-backspace` | Play / pause, rewind |
 | `:` | Commands: `:tempo 140`, `:12` (jump to bar 12), `:play`, `:stop`, `:help`, `:q` |
-| `?` | Help |
+| `?` / `f1` | Help |
+| `f2`, the Settings button, `:set` | Settings: look, font, vim keys on or off |
 
 The hints in the status line can be clicked as well.
+
+Look (colors) and font are separate settings. The font `auto` follows the look: the Pingo look draws with the Pingo
+pixel font, the others with a system font (`mono`, `sans`) in a smooth style like any desktop app; any font works with
+any look (`:font mono`, `:font ~/fonts/x.ttf`, `:look terminal`). With vim keys off only arrows, tab, enter, esc,
+space and the F-keys remain (`f1` help, `f2` settings); the rest is done with the mouse.
 
 PingoCore is fetched over SSH (`.cargo/config.toml`). To work on both at once with `../PingoCore` checked out, add a
 `[patch]` table there as PingoCore's `docs/EMBEDDING.md` describes, and leave it out of commits.
