@@ -638,14 +638,27 @@ impl Studio {
             (bounds.w - used).max(0.0),
             bounds.h - 1.0,
         );
-        let actions = keys::hinted(self.focus.current(), self.roll_open);
-        let hints = self.keymap.hints(&self.layers(), actions);
+        let wanted = keys::hinted(self.focus.current(), self.roll_open);
+        let (hints, actions) = self.keymap.hints_with_actions(&self.layers(), wanted);
         let showcmd = self.pending.showcmd();
         if let Some(i) = draw_hint_buttons(ui, hints_rect, &hints, HintStyle::Inline, &showcmd)
             && let Some(action) = actions.get(i)
         {
             self.act(*action, None);
         }
+    }
+
+    /// Everything but the popups.
+    fn draw_screen(&mut self, ui: &mut Ui, layout: &Layout) {
+        self.draw_transport(ui, layout.transport);
+        self.draw_channels(ui, layout.channels);
+        self.draw_instrument(ui, layout.instrument);
+        if self.roll_open {
+            self.draw_pattern(ui, layout.middle);
+        } else {
+            self.draw_arrangement(ui, layout.middle);
+        }
+        self.draw_status(ui, layout.status);
     }
 
     /// A click on a pane gives it the keyboard.
@@ -689,18 +702,13 @@ impl App for Studio {
 
     fn draw(&mut self, ui: &mut Ui) {
         let layout = self.layout(ui);
-        if matches!(self.mode, Mode::Normal) {
-            self.focus_on_click(ui, &layout);
-        }
-        self.draw_transport(ui, layout.transport);
-        self.draw_channels(ui, layout.channels);
-        self.draw_instrument(ui, layout.instrument);
-        if self.roll_open {
-            self.draw_pattern(ui, layout.middle);
+        if matches!(self.mode, Mode::Help(_)) {
+            // Under the help popup nothing takes the mouse.
+            ui.without_pointer(|ui| self.draw_screen(ui, &layout));
         } else {
-            self.draw_arrangement(ui, layout.middle);
+            self.focus_on_click(ui, &layout);
+            self.draw_screen(ui, &layout);
         }
-        self.draw_status(ui, layout.status);
         if let Mode::Help(help) = &mut self.mode {
             let area = ui.area();
             if draw_help(ui, area, help, &mut self.help_bar) {
@@ -958,6 +966,18 @@ mod tests {
         assert_eq!(h.app.position, 44.0);
         h.keys(":nope<cr>");
         assert_eq!(h.app.report(), Some("Unknown command :nope"));
+    }
+
+    #[test]
+    fn clicks_do_not_fall_through_the_help() {
+        let mut h = harness();
+        h.keys("?");
+        // The second channel row, left of the popup: while help is open it
+        // must not react.
+        let y = TRANSPORT_HEIGHT + GAP + 18.0 + 1.0 + 19.0 + 5.0;
+        h.click(20.0, y);
+        assert_eq!(h.app.current, 0);
+        assert!(h.app.help_open());
     }
 
     #[test]
