@@ -19,4 +19,4 @@ publish = false
 compose-core = { path = "crates/compose-core" }
 # PingoCore is private: the SSH URL, fetched with the git command line (see
 # .cargo/config.toml), pinned to a release tag.
-pingo-gui = { git = "ssh://git@github.com/V-Q-M/PingoCore.git", tag = "v0.3.0" }
+pingo-gui = { git = "ssh://git@github.com/V-Q-M/PingoCore.git", tag = "v0.8.2" }
